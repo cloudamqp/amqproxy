@@ -9,7 +9,7 @@ port = 1234
 config = ""
 
 OptionParser.parse! do |parser|
-  parser.banner = "Usage: #{PROGRAM_NAME} [arguments]"
+  parser.banner = "Usage: #{File.basename PROGRAM_NAME} [arguments]"
   parser.on("-c CONFIG_FILE", "--config=CONFIG_FILE", "Config file to read") do |c|
     config = c
   end
@@ -22,8 +22,7 @@ OptionParser.parse! do |parser|
 end
 
 unless config.empty?
-  puts "Trying to read config #{config}"
-  #abort "Config could not be found" unless File.file?(config)
+  abort "Config file could not be read" unless File.file? config
   ini = INI.parse(File.read(config))
   p ini
 end
