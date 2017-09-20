@@ -24,7 +24,8 @@ OptionParser.parse! do |parser|
   parser.on("-u AMQP_URL", "--upstream=AMQP_URL", "URL to upstream server") do |u|
     url = u
   end
-  parser.on("-p PORT", "--port=PORT", "Port to listen on") { |p| config["server"]["port"] = p }
+  parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on") { |p| config["listen"]["address"] = p }
+  parser.on("-p PORT", "--port=PORT", "Port to listen on") { |p| config["listen"]["port"] = p }
   parser.on("-P PREFETCH", "--default-prefetch=PREFETCH", "Default prefetch for channels") { |p| config["server"]["defaultPrefetch"] = p }
   parser.on("-C MAXCONNECTIONS", "--max-connections=MAXCONNECTIONS", "Max connections opened to upstream") { |p| config["server"]["maxConnections"] = p }
   parser.on("-h", "--help", "Show this help") { puts parser; exit 1 }
