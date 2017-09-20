@@ -57,10 +57,8 @@ module AMQProxy
           if @default_prefetch > 0_u16
             write AMQP::Basic::Qos.new(frame.channel, 0_u32, @default_prefetch, false).to_slice
             nextFrame = AMQP::Frame.decode @socket
-            if typeof(nextFrame) == AMQP::Basic::QosOk && nextFrame.channel == frame.channel
-              next
-            else
-              raise "Unexpected frame after setting default prefetch: #{frame.inspect}"
+            if nextFrame.class != AMQP::Basic::QosOk || nextFrame.channel != frame.channel
+              raise "Unexpected frame after setting default prefetch: #{nextFrame.inspect}"
             end
           end
         when AMQP::Channel::CloseOk
