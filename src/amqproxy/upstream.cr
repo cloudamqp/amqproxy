@@ -112,7 +112,8 @@ module AMQProxy
       assert_frame_type tune, AMQP::Connection::Tune
 
       channel_max = tune.as(AMQP::Connection::Tune).channel_max
-      tune_ok = AMQP::Connection::TuneOk.new(heartbeat: 0_u16, channel_max: channel_max)
+      frame_max = tune.as(AMQP::Connection::Tune).frame_max
+      tune_ok = AMQP::Connection::TuneOk.new(channel_max, frame_max, 0_u16)
       @socket.write tune_ok.to_slice
 
       open = AMQP::Connection::Open.new(vhost: @vhost)
