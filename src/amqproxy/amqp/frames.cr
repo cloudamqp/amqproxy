@@ -70,7 +70,7 @@ module AMQProxy
         super(Slice(UInt8).new(0))
       end
 
-      def decode
+      def self.decode
         self.new
       end
     end
@@ -99,7 +99,7 @@ module AMQProxy
         when 20_u16 then Channel.decode(channel, body)
           #when 40_u16 then Exchange.decode(channel, body)
           #when 50_u16 then Queue.decode(channel, body)
-          #when 60_u16 then Basic.decode(channel, body)
+         when 60_u16 then Basic.decode(channel, body)
           #when 90_u16 then Tx.decode(channel, body)
         else
           #puts "class-id #{class_id} not implemented yet"
@@ -199,7 +199,7 @@ module AMQProxy
           30_u16
         end
 
-        def initialize(@channel_max = 0_u16, @frame_max = 131072_u32, @heartbeat = 60_u16)
+        def initialize(@channel_max : UInt16, @frame_max : UInt32, @heartbeat : UInt16)
           super()
         end
 
@@ -247,7 +247,7 @@ module AMQProxy
           vhost = io.read_short_string
           reserved1 = io.read_short_string
           reserved2 = io.read_bool
-          Open.new(vhost, reserved1, reserved2)
+          self.new(vhost, reserved1, reserved2)
         end
       end
 
@@ -270,7 +270,7 @@ module AMQProxy
 
         def self.decode(io)
           reserved1 = io.read_short_string
-          OpenOk.new(reserved1)
+          self.new(reserved1)
         end
       end
 
@@ -353,7 +353,7 @@ module AMQProxy
 
         def self.decode(channel, io)
           reserved1 = io.read_short_string
-          Open.new channel, reserved1
+          self.new channel, reserved1
         end
       end
 
@@ -376,7 +376,7 @@ module AMQProxy
 
         def self.decode(channel, io)
           reserved1 = io.read_long_string
-          OpenOk.new channel, reserved1
+          self.new channel, reserved1
         end
       end
 
@@ -405,7 +405,7 @@ module AMQProxy
           reply_text = io.read_short_string
           classid = io.read_uint16
           methodid = io.read_uint16
-          Close.new channel, reply_code, reply_text, classid, methodid
+          self.new channel, reply_code, reply_text, classid, methodid
         end
       end
 
@@ -419,7 +419,7 @@ module AMQProxy
         end
 
         def self.decode(channel, io)
-          CloseOk.new channel
+          self.new channel
         end
       end
     end
@@ -434,7 +434,7 @@ module AMQProxy
         case method_id
         when 10_u16 then Qos.decode(channel, body)
         when 11_u16 then QosOk.decode(channel, body)
-        else raise "Unknown method_id #{method_id}"
+        else GenericFrame.new(Type::Method, channel, body.to_slice)
         end
       end
 
@@ -445,7 +445,8 @@ module AMQProxy
 
         getter prefetch_size, prefetch_count, global
 
-        def initialize(channel : UInt16, @prefetch_size : UInt32, @prefetch_count : UInt16, @global : Bool)
+        def initialize(channel : UInt16, @prefetch_size : UInt32,
+                       @prefetch_count : UInt16, @global : Bool)
           super(channel)
         end
 
@@ -460,8 +461,8 @@ module AMQProxy
         def self.decode(channel, io)
           prefetch_size = io.read_uint32
           prefetch_count = io.read_uint16
-          global = io.read_byte
-          Open.new channel, prefetch_size, prefetch_count, global
+          global = io.read_bool
+          self.new(channel, prefetch_size, prefetch_count, global)
         end
       end
 
@@ -474,8 +475,8 @@ module AMQProxy
           super(Slice(UInt8).new(0))
         end
 
-        def decode
-          self.new
+        def self.decode(channel, io)
+          self.new(channel)
         end
       end
     end
