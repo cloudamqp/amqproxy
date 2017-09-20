@@ -6,7 +6,7 @@ require "ini"
 
 config = {
   "server" => {
-    "url" => "amqp://localhost:5672",
+    "upstream" => "amqp://localhost:5672",
     "maxConnections" => "5000",
   },
   "listen" => {
