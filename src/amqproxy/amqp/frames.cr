@@ -423,5 +423,61 @@ module AMQProxy
         end
       end
     end
+
+    abstract class Basic < MethodFrame
+      def class_id
+        60_u16
+      end
+
+      def self.decode(channel, body)
+        method_id = body.read_uint16
+        case method_id
+        when 10_u16 then Qos.decode(channel, body)
+        when 11_u16 then QosOk.decode(channel, body)
+        else raise "Unknown method_id #{method_id}"
+        end
+      end
+
+      class Qos < Basic
+        def method_id
+          10_u16
+        end
+
+        getter prefetch_size, prefetch_count, global
+
+        def initialize(channel : UInt16, @prefetch_size : UInt32, @prefetch_count : UInt16, @global : Bool)
+          super(channel)
+        end
+
+        def to_slice
+          io = AMQP::IO.new(4 + 2 + 1)
+          io.write_int @prefetch_size
+          io.write_int @prefetch_count
+          io.write_bool @global
+          super(io.to_slice)
+        end
+
+        def self.decode(channel, io)
+          prefetch_size = io.read_uint32
+          prefetch_count = io.read_uint16
+          global = io.read_byte
+          Open.new channel, prefetch_size, prefetch_count, global
+        end
+      end
+
+      class QosOk < Basic
+        def method_id
+          11_u16
+        end
+
+        def to_slice
+          super(Slice(UInt8).new(0))
+        end
+
+        def decode
+          self.new
+        end
+      end
+    end
   end
 end

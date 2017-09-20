@@ -4,7 +4,7 @@ require "uri"
 
 module AMQProxy
   class Upstream
-    def initialize(url)
+    def initialize(url : String, default_prefetch : UInt16)
       uri = URI.parse url
       @tls = (uri.scheme == "amqps").as(Bool)
       @host = uri.host || "localhost"
@@ -13,6 +13,8 @@ module AMQProxy
       @password = uri.password || "guest"
       path = uri.path || ""
       @vhost = path.empty? ? "/" : path[1..-1]
+
+      @default_prefetch = default_prefetch
 
       @socket = uninitialized IO
       @connection_commands = Channel(Nil).new
@@ -48,6 +50,15 @@ module AMQProxy
         case frame
         when AMQP::Channel::OpenOk
           @open_channels.add frame.channel
+          if @default_prefetch > 0_u16
+            write AMQP::Basic::Qos.new(frame.channel, 0_u32, @default_prefetch, false).to_slice
+            nextFrame = AMQP::Frame.decode @socket
+            if typeof(nextFrame) == AMQP::Basic::QosOk && nextFrame.channel == frame.channel
+              next
+            else
+              raise "Unexpected frame after setting default prefetch: #{frame.inspect}"
+            end
+          end
         when AMQP::Channel::CloseOk
           @open_channels.delete frame.channel
         end

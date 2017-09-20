@@ -7,16 +7,16 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    def initialize(upstream_url : String)
-      puts "Proxy upstream: #{upstream_url}"
+    def initialize(config : Hash(String, String))
+      puts "Proxy upstream: #{config["upstream"]}"
 
-      @pool = Pool(Upstream).new(250) do
-        Upstream.new(upstream_url)
+      @pool = Pool(Upstream).new(config["maxConnections"].to_i) do
+        Upstream.new(config["upstream"], config.fetch("defaultPrefetch", "0").to_u16)
       end
     end
 
-    def listen(port : Int)
-      server = TCPServer.new("localhost", port)
+    def listen(address : String, port : Int)
+      server = TCPServer.new(address, port)
       puts "Proxy listening on #{server.local_address}"
       loop do
         if socket = server.accept?
