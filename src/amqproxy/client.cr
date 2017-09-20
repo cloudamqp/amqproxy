@@ -47,7 +47,7 @@ module AMQProxy
 
       start_ok = AMQP::Frame.decode client
 
-      tune = AMQP::Connection::Tune.new(heartbeat: 60_u16)
+      tune = AMQP::Connection::Tune.new(frame_max: 4096_u32, channel_max: 0_u16, heartbeat: 60_u16)
       client.write tune.to_slice
 
       tune_ok = AMQP::Frame.decode client
