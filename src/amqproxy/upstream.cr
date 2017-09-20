@@ -17,7 +17,8 @@ module AMQProxy
       @default_prefetch = default_prefetch
 
       @socket = uninitialized IO
-      @connection_commands = Channel(Nil).new
+      @connected = false
+      @reconnect = Channel(Nil).new
       @frame_channel = Channel(AMQP::Frame?).new
       @open_channels = Set(UInt16).new
       spawn connect!
@@ -29,18 +30,21 @@ module AMQProxy
           tcp_socket = TCPSocket.new(@host, @port)
           @socket = if @tls
                       context = OpenSSL::SSL::Context::Client.new
-                      @socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, context)
+                      OpenSSL::SSL::Socket::Client.new(tcp_socket, context)
                     else
                       tcp_socket
                     end
+          @connected = true
           negotiate_server
           spawn decode_frames
           puts "Connected to upstream #{@host}:#{@port}"
-          @connection_commands.receive
+          @reconnect.receive
         rescue ex : Errno
-          puts ex.message
-          sleep 1
+          puts "When connecting: ", ex.message
+        ensure
+          @connected = false
         end
+        sleep 1
       end
     end
 
@@ -65,10 +69,11 @@ module AMQProxy
         @frame_channel.send frame
       end
     rescue ex : Errno | IO::EOFError
-      puts "proxy decode frame, reconnect: #{ex.inspect}"
+      puts "proxy decode frame, reconnect: ", ex.message
+      ex.backtrace.each { |l| puts l }
       @open_channels.clear
       @frame_channel.receive?
-      @connection_commands.send nil
+      @reconnect.send nil
     end
 
     def next_frame
@@ -78,14 +83,14 @@ module AMQProxy
     def write(bytes : Slice(UInt8))
       @socket.write bytes
     rescue ex : Errno | IO::EOFError
-      puts "proxy write bytes, reconnect: #{ex.inspect}"
-      @connection_commands.send nil
+      puts "proxy write bytes, reconnect: #{ex.message}"
+      @reconnect.send nil
       Fiber.yield
       write(bytes)
     end
 
     def closed?
-      @socket.closed?
+      !@connected || @socket.closed?
     end
 
     def close_all_open_channels
