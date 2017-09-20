@@ -4,15 +4,16 @@ require "option_parser"
 require "file"
 require "ini"
 
-config = {} of String => Hash(String, String)
-config["server"] = {
-  "url" => "amqp://guest:guest@localhost:5672",
-  "maxConnections" => "5000",
-}
-config["listen"] = {
-  "address" => "localhost",
-  "port" => "5673",
-}
+config = {
+  "server" => {
+    "url" => "amqp://localhost:5672",
+    "maxConnections" => "5000",
+  },
+  "listen" => {
+    "address" => "localhost",
+    "port" => "5673",
+  }
+} of String => Hash(String, String)
 
 OptionParser.parse! do |parser|
   parser.banner = "Usage: #{File.basename PROGRAM_NAME} [arguments]"
