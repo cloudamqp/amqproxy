@@ -1,18 +1,14 @@
 require "socket"
 require "./amqp"
-require "./token_bucket"
-require "./pool"
 require "./client"
 require "./upstream"
 
 module AMQProxy
   class Server
     def initialize(config : Hash(String, String))
+      @upstream_url = config["upstream"]
+      @default_prefetch = @config.fetch("defaultPrefetch", "0").to_u16)
       puts "Proxy upstream: #{config["upstream"]}"
-
-      @pool = Pool(Upstream).new(config["maxConnections"].to_i) do
-        Upstream.new(config["upstream"], config.fetch("defaultPrefetch", "0").to_u16)
-      end
     end
 
     def listen(address : String, port : Int)
@@ -30,31 +26,29 @@ module AMQProxy
     def handle_connection(socket)
       client = Client.new(socket)
       puts "Client connection opened"
-
-      #bucket = TokenBucket.new(100, 5.seconds)
-      @pool.borrow do |upstream|
-        begin
-          loop do
-            idx, frame = Channel.select([upstream.next_frame, client.next_frame])
-            case idx
-            when 0
-              break if frame.nil?
-              client.write frame.to_slice
-            when 1
-              if frame.nil?
-                upstream.close_all_open_channels
-                break
-              else
-                upstream.write frame.to_slice
-              end
+      upstream = Upstream.new(@upstream_url, @default_prefetch)
+      puts "Upstream connection established"
+      begin
+        loop do
+          idx, frame = Channel.select([upstream.next_frame, client.next_frame])
+          case idx
+          when 0
+            break if frame.nil?
+            client.write frame.to_slice
+          when 1
+            if frame.nil?
+              upstream.close_all_open_channels
+              break
+            else
+              upstream.write frame.to_slice
             end
           end
-        rescue ex : IO::EOFError | Errno
-          puts "Client loop #{ex.inspect}"
-        ensure
-          puts "Client connection closed"
-          socket.close
         end
+      rescue ex : IO::EOFError | Errno
+        puts "Client loop #{ex.inspect}"
+      ensure
+        puts "Client connection closed"
+        socket.close
       end
     end
   end

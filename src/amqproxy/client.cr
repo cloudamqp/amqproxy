@@ -4,7 +4,7 @@ module AMQProxy
   class Client
     def initialize(@socket : TCPSocket)
       negotiate_client(@socket)
-      @channel = Channel(AMQP::Frame?).new
+      @outbox = Channel(AMQP::Frame?).new
       spawn decode_frames
     end
 
@@ -14,18 +14,18 @@ module AMQProxy
         case frame
         when AMQP::Connection::Close
           @socket.write AMQP::Connection::CloseOk.new.to_slice
-          @channel.send nil
+          @outbox.send nil
           break
         end
-        @channel.send frame
+        @outbox.send frame
       end
     rescue ex : IO::EOFError
-      puts "Client conn closed #{ex.inspect}"
-      @channel.send nil
+      puts "Client conn closed #{ex.message}"
+      @outbox.send nil
     end
 
     def next_frame
-      @channel.receive_select_action
+      @outbox.receive_select_action
     end
 
     def write(bytes : Slice(UInt8))
@@ -41,21 +41,6 @@ module AMQProxy
         client.close
         return
       end
-
-      start = AMQP::Connection::Start.new
-      client.write start.to_slice
-
-      start_ok = AMQP::Frame.decode client
-
-      tune = AMQP::Connection::Tune.new(frame_max: 4096_u32, channel_max: 0_u16, heartbeat: 60_u16)
-      client.write tune.to_slice
-
-      tune_ok = AMQP::Frame.decode client
-
-      open = AMQP::Frame.decode client
-
-      open_ok = AMQP::Connection::OpenOk.new
-      client.write open_ok.to_slice
     end
   end
 end
