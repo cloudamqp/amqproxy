@@ -2,7 +2,7 @@ require "socket"
 
 module AMQProxy
   class Client
-    def initialize(@socket : TCPSocket)
+    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
       negotiate_client(@socket)
       @outbox = Channel(AMQP::Frame?).new
       spawn decode_frames
@@ -10,17 +10,10 @@ module AMQProxy
 
     def decode_frames
       loop do
-        frame = AMQP::Frame.decode @socket
-        case frame
-        when AMQP::Connection::Close
-          @socket.write AMQP::Connection::CloseOk.new.to_slice
-          @outbox.send nil
-          break
-        end
-        @outbox.send frame
+        @outbox.send AMQP::Frame.decode(@socket)
       end
-    rescue ex : IO::EOFError
-      puts "Client conn closed #{ex.message}"
+    rescue ex : IO::Error | IO::EOFError | OpenSSL::SSL::Error
+      puts "Client conn closed: #{ex.message}"
       @outbox.send nil
     end
 

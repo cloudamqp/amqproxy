@@ -31,4 +31,9 @@ OptionParser.parse! do |parser|
 end
 
 server = AMQProxy::Server.new(config["server"])
-server.listen(config["listen"]["address"], config["listen"]["port"].to_i)
+if config["listen"]["certificateChain"]?
+  server.listen_tls(config["listen"]["address"], config["listen"]["port"].to_i,
+                    config["listen"]["certificateChain"], config["listen"]["privateKey"])
+else
+  server.listen(config["listen"]["address"], config["listen"]["port"].to_i)
+end
