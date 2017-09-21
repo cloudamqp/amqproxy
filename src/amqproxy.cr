@@ -21,9 +21,7 @@ OptionParser.parse! do |parser|
     abort "Config file could not be read" unless File.file? c
     config.merge!(INI.parse(File.read(c)))
   end
-  parser.on("-u AMQP_URL", "--upstream=AMQP_URL", "URL to upstream server") do |u|
-    url = u
-  end
+  parser.on("-u AMQP_URL", "--upstream=AMQP_URL", "URL to upstream server") { |u| url = u }
   parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on") { |p| config["listen"]["address"] = p }
   parser.on("-p PORT", "--port=PORT", "Port to listen on") { |p| config["listen"]["port"] = p }
   parser.on("-P PREFETCH", "--default-prefetch=PREFETCH", "Default prefetch for channels") { |p| config["server"]["defaultPrefetch"] = p }
