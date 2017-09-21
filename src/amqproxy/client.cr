@@ -12,7 +12,7 @@ module AMQProxy
       loop do
         @outbox.send AMQP::Frame.decode(@socket)
       end
-    rescue ex : IO::Error | IO::EOFError | OpenSSL::SSL::Error
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
       puts "Client conn closed: #{ex.message}"
       @outbox.send nil
     end

@@ -50,29 +50,33 @@ module AMQProxy
       end
     end
 
+    def close
+      @closing = true
+      @socket.close if @socket
+    end
+
     def handle_connection(socket)
       client = Client.new(socket)
-      puts "Client connection opened"
       upstream = Upstream.new(@upstream_url, @default_prefetch)
-      puts "Upstream connection established"
-      begin
-        loop do
-          idx, frame = Channel.select([upstream.next_frame, client.next_frame])
-          case idx
-          when 0 # Upstream
-            break if frame.nil?
-            client.write frame.to_slice
-          when 1 # Client
-            break if frame.nil?
-            upstream.write frame.to_slice
-          end
+      loop do
+        idx, frame = Channel.select([upstream.next_frame, client.next_frame])
+        case idx
+        when 0 # Upstream
+          break if frame.nil?
+          client.write frame.to_slice
+        when 1 # Client
+          break if frame.nil?
+          upstream.write frame.to_slice
         end
-      rescue ex : IO::Error | IO::EOFError | Errno
-        puts "Client loop #{ex.inspect}"
-      ensure
-        puts "Client connection closed"
-        socket.close
       end
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+      print "Client loop #{ex.inspect}"
+    ensure
+      #print "Client connection closed from ", socket.remote_address, "\n"
+      puts "Closing upstream conn"
+      upstream.close if upstream
+      puts "Closing client conn"
+      socket.close
     end
   end
 end
