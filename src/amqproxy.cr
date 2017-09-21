@@ -31,9 +31,17 @@ OptionParser.parse! do |parser|
 end
 
 server = AMQProxy::Server.new(config["server"])
-if config["listen"]["certificateChain"]?
-  server.listen_tls(config["listen"]["address"], config["listen"]["port"].to_i,
-                    config["listen"]["certificateChain"], config["listen"]["privateKey"])
-else
-  server.listen(config["listen"]["address"], config["listen"]["port"].to_i)
+Signal::HUP.trap do
+  puts "Reloading"
 end
+shutdown = -> (s : Signal) { print "Terminating..."; server.close; print "OK"; exit 0 }
+Signal::INT.trap &shutdown
+Signal::TERM.trap &shutdown
+listen = config["listen"]
+if listen["certificateChain"]?
+    server.listen_tls(listen["address"], listen["port"].to_i,
+                      listen["certificateChain"], listen["privateKey"])
+else
+  server.listen(listen["address"], listen["port"].to_i)
+end
+
