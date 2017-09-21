@@ -27,7 +27,7 @@ module AMQProxy
                   tcp_socket
                 end
       negotiate_server
-      puts "Connected to upstream #{@host}:#{@port}"
+      print "Connected to upstream ", tcp_socket.remote_address, "\n"
     end
 
     def decode_frames
@@ -61,8 +61,12 @@ module AMQProxy
       @outbox.send nil
     end
 
+    def close
+      @socket.close
+    end
+
     def closed?
-      !@connected || @socket.closed?
+      @socket.closed?
     end
 
     private def negotiate_server
