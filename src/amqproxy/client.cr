@@ -23,16 +23,19 @@ module AMQProxy
 
     def write(bytes : Slice(UInt8))
       @socket.write bytes
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+      puts "Client conn closed: #{ex.message}"
+      @outbox.send nil
     end
 
-    private def negotiate_client(client)
+    private def negotiate_client(socket)
       start = Bytes.new(8)
-      bytes = client.read_fully(start)
+      bytes = socket.read_fully(start)
 
       if start != AMQP::PROTOCOL_START
-        client.write AMQP::PROTOCOL_START
-        client.close
-        return
+        socket.write AMQP::PROTOCOL_START
+        socket.close
+        raise IO::EOFError.new("Invalid protocol start")
       end
     end
   end
