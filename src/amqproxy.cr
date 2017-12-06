@@ -34,14 +34,12 @@ server = AMQProxy::Server.new(config["server"])
 Signal::HUP.trap do
   puts "Reloading"
 end
-shutdown = -> (s : Signal) { print "Terminating..."; server.close; print "OK"; exit 0 }
+shutdown = -> (s : Signal) { print "Terminating..."; server.close; print "OK\n"; exit 0 }
 Signal::INT.trap &shutdown
 Signal::TERM.trap &shutdown
 listen = config["listen"]
 if listen["certificateChain"]?
-    server.listen_tls(listen["address"], listen["port"].to_i,
-                      listen["certificateChain"], listen["privateKey"])
+  server.listen_tls(listen["certificateChain"], listen["privateKey"])
 else
-  server.listen(listen["address"], listen["port"].to_i)
+  server.listen
 end
-

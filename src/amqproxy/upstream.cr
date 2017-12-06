@@ -9,6 +9,10 @@ module AMQProxy
       @tls = (uri.scheme == "amqps").as(Bool)
       @host = uri.host || "localhost"
       @port = uri.port || (@tls ? 5671 : 5672)
+      @user = uri.user || "guest"
+      @password = uri.password || "guest"
+      path = uri.path || ""
+      @vhost = path.empty? ? "/" : path[1..-1]
 
       @default_prefetch = default_prefetch
 
@@ -71,6 +75,32 @@ module AMQProxy
 
     private def negotiate_server
       @socket.write AMQP::PROTOCOL_START
+
+      start = AMQP::Frame.decode @socket
+      assert_frame_type start, AMQP::Connection::Start
+
+      start_ok = AMQP::Connection::StartOk.new(response: "\u0000#{@user}\u0000#{@password}")
+      @socket.write start_ok.to_slice
+
+      tune = AMQP::Frame.decode @socket
+      assert_frame_type tune, AMQP::Connection::Tune
+
+      channel_max = tune.as(AMQP::Connection::Tune).channel_max
+      frame_max = tune.as(AMQP::Connection::Tune).frame_max
+      tune_ok = AMQP::Connection::TuneOk.new(channel_max, frame_max, 0_u16)
+      @socket.write tune_ok.to_slice
+
+      open = AMQP::Connection::Open.new(vhost: @vhost)
+      @socket.write open.to_slice
+
+      open_ok = AMQP::Frame.decode @socket
+      assert_frame_type open_ok, AMQP::Connection::OpenOk
+    end
+
+    private def assert_frame_type(frame, clz)
+      unless frame.class == clz
+        raise "Expected frame #{clz} but got: #{frame.inspect}"
+      end
     end
   end
 end
