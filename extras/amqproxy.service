@@ -1,0 +1,15 @@
+[Unit]
+Description=AMQProxy server for connection pooling
+Documentation=https://github.com/cloudamqp/amqproxy
+Requires=network.target
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/amqproxy -p 5673 -u 127.0.0.1:5672
+Restart=on-failure
+User=nobody
+Group=nogroup
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target
