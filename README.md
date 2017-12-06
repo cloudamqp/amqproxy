@@ -1,30 +1,23 @@
 # AMQProxy
 
-An intelligent AMQP proxy, with AMQP frame rate limiting, connection pooling/reusing etc.
+An intelligent AMQP proxy, with AMQP connection pooling/reusing etc. Allows PHP clients to keep long lived connections to upstream servers.
 
 ## Installation
 
+[Install Crystal](https://crystal-lang.org/docs/installation/)
+
 ```
-shards build
-bin/amqproxy
+shards build --release
+cp bin/amqproxy /usr/local/bin
+cp extras/amqproxy.service /etc/systemd/systems/
+service start amqproxy
 ```
+
+You probably want to modify `/etc/systemd/systems/amqproxy.service` and configure another upstream host.
+
 
 ## Usage
 
-`bin/amqproxy -p PORT -u UPSTREAM:PORT`
+`bin/amqproxy -p PORT -u AMQP_URL`
 
-## Development
-
-TODO: Write development instructions here
-
-## Contributing
-
-1. Fork it ( https://github.com/cloudamqp/amqproxy/fork )
-2. Create your feature branch (git checkout -b my-new-feature)
-3. Commit your changes (git commit -am 'Add some feature')
-4. Push to the branch (git push origin my-new-feature)
-5. Create a new Pull Request
-
-## Contributors
-
-- [carlhoerberg](https://github.com/carlhoerberg) Carl Hörberg - creator, maintainer
+Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream.
