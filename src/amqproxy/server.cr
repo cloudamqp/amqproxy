@@ -56,7 +56,7 @@ module AMQProxy
 
     def close
       @closing = true
-      @socket && @socket.as(TCPServer).close
+      @socket.close
     end
 
     def handle_connection(socket)

@@ -186,10 +186,10 @@ module AMQProxy
 
         def self.decode(io)
           props = io.read_table
-          mech = io.read_short_string
-          auth = io.read_long_string
+          mechanism = io.read_short_string
+          response = io.read_long_string
           locale = io.read_short_string
-          self.new(props, mech, auth, locale)
+          self.new(props, mechanism, response, locale)
         end
       end
 

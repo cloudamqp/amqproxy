@@ -18,6 +18,7 @@ module AMQProxy
 
       @socket = uninitialized IO
       @outbox = Channel(AMQP::Frame?).new
+      @open_channels = Set(UInt16).new
       connect!
       spawn decode_frames
     end
@@ -71,6 +72,14 @@ module AMQProxy
 
     def closed?
       @socket.closed?
+    end
+
+    def close_all_open_channels
+      @open_channels.each do |ch|
+        puts "Closing client channel #{ch}"
+        @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
+        @frame_channel.receive
+      end
     end
 
     private def negotiate_server

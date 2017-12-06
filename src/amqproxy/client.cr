@@ -2,8 +2,13 @@ require "socket"
 
 module AMQProxy
   class Client
+    getter vhost, user, password
+    @vhost : String
+    @user : String
+    @password : String
+
     def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
-      negotiate_client(@socket)
+      @vhost, @user, @password = negotiate_client(@socket)
       @channel = Channel(AMQP::Frame?).new
       spawn decode_frames
     end
@@ -35,7 +40,7 @@ module AMQProxy
       @channel.send nil
     end
 
-    private def negotiate_client(socket)
+    private def negotiate_client(socket) : Array(String)
       start = Bytes.new(8)
       bytes = socket.read_fully(start)
 
@@ -48,17 +53,21 @@ module AMQProxy
       start = AMQP::Connection::Start.new
       socket.write start.to_slice
 
-      start_ok = AMQP::Frame.decode socket
+      start_ok = AMQP::Frame.decode(socket).as(AMQP::Connection::StartOk)
+      response = start_ok.response
+      _, user, password = response.split("\u0000")
 
-      tune = AMQP::Connection::Tune.new(frame_max: 4096_u32, channel_max: 0_u16, heartbeat: 60_u16)
+      tune = AMQP::Connection::Tune.new(frame_max: 4096_u32, channel_max: 0_u16, heartbeat: 600_u16)
       socket.write tune.to_slice
 
       tune_ok = AMQP::Frame.decode socket
 
-      open = AMQP::Frame.decode socket
+      open = AMQP::Frame.decode(socket).as(AMQP::Connection::Open)
 
       open_ok = AMQP::Connection::OpenOk.new
       socket.write open_ok.to_slice
+
+      [open.vhost, user, password]
     end
   end
 end
