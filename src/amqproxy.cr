@@ -30,9 +30,10 @@ OptionParser.parse! do |parser|
   parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
 end
 
-server = AMQProxy::Server.new(config["server"])
+server = AMQProxy::Server.new(config)
 Signal::HUP.trap do
-  puts "Reloading"
+  print "Reloading..."
+  print "OK\n"
 end
 shutdown = -> (s : Signal) { print "Terminating..."; server.close; print "OK\n"; exit 0 }
 Signal::INT.trap &shutdown

@@ -1,7 +1,6 @@
 require "socket"
 require "openssl"
 require "./amqp"
-require "./token_bucket"
 require "./pool"
 require "./client"
 require "./upstream"
@@ -10,11 +9,11 @@ module AMQProxy
   class Server
     @closing = false
 
-    def initialize(config : Hash(String, String))
-      puts "Proxy upstream: #{config["upstream"]}"
+    def initialize(config : Hash(String, Hash(String, String)))
+      puts "Proxy upstream: #{config["server"]["upstream"]}"
 
-      @pool = Pool(Upstream).new(config["maxConnections"].to_i) do
-        Upstream.new(config["upstream"], config.fetch("defaultPrefetch", "0").to_u16)
+      @pool = Pool(Upstream).new(config["server"]["maxConnections"].to_i) do
+        Upstream.new(config["server"]["upstream"], config["server"].fetch("defaultPrefetch", "0").to_u16)
       end
 
       listen = config["listen"]
@@ -61,7 +60,6 @@ module AMQProxy
 
     def handle_connection(socket)
       client = Client.new(socket)
-      #bucket = TokenBucket.new(100, 5.seconds)
       @pool.borrow do |upstream|
         begin
           loop do
@@ -90,8 +88,6 @@ module AMQProxy
       print "Client loop #{ex.inspect}"
     ensure
       #print "Client connection closed from ", socket.remote_address, "\n"
-      puts "Closing upstream conn"
-      upstream.close if upstream
       puts "Closing client conn"
       socket.close
     end

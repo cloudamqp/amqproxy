@@ -40,13 +40,7 @@ module AMQProxy
         frame = AMQP::Frame.decode @socket
         case frame
         when AMQP::Channel::OpenOk
-          if @default_prefetch > 0_u16
-            write AMQP::Basic::Qos.new(frame.channel, 0_u32, @default_prefetch, false).to_slice
-            nextFrame = AMQP::Frame.decode @socket
-            if nextFrame.class != AMQP::Basic::QosOk || nextFrame.channel != frame.channel
-              raise "Unexpected frame after setting default prefetch: #{nextFrame.class}"
-            end
-          end
+          @open_channels << frame.channel
         end
         @outbox.send frame
       end
@@ -78,7 +72,8 @@ module AMQProxy
       @open_channels.each do |ch|
         puts "Closing client channel #{ch}"
         @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
-        @frame_channel.receive
+        next_frame = AMQP::Frame.decode @socket
+        assert_frame_type next_frame, AMQP::Channel::CloseOk
       end
     end
 
