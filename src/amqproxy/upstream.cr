@@ -72,22 +72,19 @@ module AMQProxy
       @open_channels.each do |ch|
         puts "Closing client channel #{ch}"
         @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
-        next_frame = AMQP::Frame.decode @socket
-        assert_frame_type next_frame, AMQP::Channel::CloseOk
+        close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
       end
     end
 
     private def negotiate_server
       @socket.write AMQP::PROTOCOL_START
 
-      start = AMQP::Frame.decode @socket
-      assert_frame_type start, AMQP::Connection::Start
+      start = AMQP::Frame.decode(@socket).as(AMQP::Connection::Start)
 
       start_ok = AMQP::Connection::StartOk.new(response: "\u0000#{@user}\u0000#{@password}")
       @socket.write start_ok.to_slice
 
-      tune = AMQP::Frame.decode @socket
-      assert_frame_type tune, AMQP::Connection::Tune
+      tune = AMQP::Frame.decode(@socket).as(AMQP::Connection::Tune)
 
       channel_max = tune.as(AMQP::Connection::Tune).channel_max
       frame_max = tune.as(AMQP::Connection::Tune).frame_max
@@ -97,14 +94,7 @@ module AMQProxy
       open = AMQP::Connection::Open.new(vhost: @vhost)
       @socket.write open.to_slice
 
-      open_ok = AMQP::Frame.decode @socket
-      assert_frame_type open_ok, AMQP::Connection::OpenOk
-    end
-
-    private def assert_frame_type(frame, clz)
-      unless frame.class == clz
-        raise "Expected frame #{clz} but got: #{frame.inspect}"
-      end
+      open_ok = AMQP::Frame.decode(@socket).as(AMQP::Connection::OpenOk)
     end
   end
 end
