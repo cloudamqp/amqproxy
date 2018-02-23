@@ -79,6 +79,8 @@ module AMQProxy
       start = AMQP::Frame.decode(@socket).as(AMQP::Connection::Start)
 
       props = {
+        "product" => "AMQProxy",
+        "version" => AMQProxy::VERSION,
         "capabilities" => {
           "authentication_failure_close" => true
         } of String => AMQP::Field
