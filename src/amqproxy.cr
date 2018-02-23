@@ -1,45 +1,38 @@
 require "./amqproxy/version"
 require "./amqproxy/server"
 require "option_parser"
-require "file"
-require "ini"
+require "uri"
 
-config = {
-  "server" => {
-    "upstream" => "amqp://localhost:5672",
-    "maxConnections" => "5000",
-  },
-  "listen" => {
-    "address" => "localhost",
-    "port" => "5673",
-  }
-} of String => Hash(String, String)
-
-OptionParser.parse! do |parser|
-  parser.banner = "Usage: #{File.basename PROGRAM_NAME} [arguments]"
-  parser.on("-c CONFIG_FILE", "--config=CONFIG_FILE", "Config file to read") do |c|
-    abort "Config file could not be read" unless File.file? c
-    config.merge!(INI.parse(File.read(c)))
-  end
-  parser.on("-u AMQP_URL", "--upstream=AMQP_URL", "URL to upstream server") { |u| config["server"]["upstream"] = u }
-  parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on") { |p| config["listen"]["address"] = p }
-  parser.on("-p PORT", "--port=PORT", "Port to listen on") { |p| config["listen"]["port"] = p }
-  parser.on("-C MAXCONNECTIONS", "--max-connections=MAXCONNECTIONS", "Max connections opened to upstream") { |p| config["server"]["maxConnections"] = p }
-  parser.on("-h", "--help", "Show this help") { puts parser; exit 1 }
+listen_address = "localhost"
+listen_port = 5673
+p = OptionParser.parse! do |parser|
+  parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
+  parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default: localhost)") { |p| listen_address = p }
+  parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |p| listen_port = p.to_i }
+  parser.on("-h", "--help", "Show this help") { abort parser.to_s }
   parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
 end
 
-server = AMQProxy::Server.new(config)
-Signal::HUP.trap do
-  print "Reloading..."
-  print "OK\n"
+upstream = ARGV.shift?
+abort p.to_s if upstream.nil?
+
+u = URI.parse upstream
+abort "Invalid upstream URL" unless u.host
+default_port =
+  case u.scheme
+  when "amqp" then 5672
+  when "amqps" then 5671
+  else abort "Not a valid upstream AMQP URL, should be on the format of amqps://hostname"
+  end
+port = u.port || default_port
+tls = u.scheme == "amqps"
+
+server = AMQProxy::Server.new(u.host || "", port, tls)
+shutdown = -> (s : Signal) do
+  server.close
+  exit 0
 end
-shutdown = -> (s : Signal) { print "Terminating..."; server.close; print "OK\n"; exit 0 }
 Signal::INT.trap &shutdown
 Signal::TERM.trap &shutdown
-listen = config["listen"]
-if listen["certificateChain"]?
-  server.listen_tls(listen["certificateChain"], listen["privateKey"])
-else
-  server.listen
-end
+
+server.listen(listen_address, listen_port)

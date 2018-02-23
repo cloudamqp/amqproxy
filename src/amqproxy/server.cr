@@ -1,6 +1,5 @@
 require "socket"
 require "openssl"
-require "uri"
 require "./amqp"
 require "./pool"
 require "./client"
@@ -10,53 +9,52 @@ module AMQProxy
   class Server
     @closing = false
 
-    def initialize(config : Hash(String, Hash(String, String)))
-      upstream = config["server"]["upstream"]
-      u = URI.parse upstream
-      tls = u.scheme == "amqps"
-      port = u.port || (tls ? 5671 : 5672)
-      max_connections = config["server"]["maxConnections"].to_i
-      listen = config["listen"]
-      puts "Proxy upstream: #{config["server"]["upstream"]}"
-      @pool = Pool.new(max_connections, u.host || "", port, tls)
-      @socket = TCPServer.new(listen["address"], listen["port"].to_i)
-      puts "Proxy listening on #{@socket.local_address}"
+    def initialize(upstream_host, upstream_port, upstream_tls)
+      print "Proxy upstream: #{upstream_host}:#{upstream_port} "
+      print "TLS" if upstream_tls
+      print "\n"
+      @pool = Pool.new(upstream_host, upstream_port, upstream_tls)
     end
 
-    def listen
-      until @closing
-        if client = @socket.accept?
-          spawn handle_connection(client, client.remote_address)
-        else
-          break
+    def listen(address, port)
+      TCPServer.open(address, port) do |socket|
+        puts "Proxy listening on #{socket.local_address}"
+        until @closing
+          if client = socket.accept?
+            spawn handle_connection(client, client.remote_address)
+          else
+            break
+          end
         end
       end
     end
 
-    def listen_tls(cert_path : String, key_path : String)
-      context = OpenSSL::SSL::Context::Server.new
-      context.private_key = key_path
-      context.certificate_chain = cert_path
+    def listen_tls(address, port, cert_path : String, key_path : String)
+      TCPServer.open(address, port) do |socket|
+        puts "Proxy listening on #{socket.local_address}:#{port}"
+        context = OpenSSL::SSL::Context::Server.new
+        context.private_key = key_path
+        context.certificate_chain = cert_path
 
-      until @closing
-        if client = @socket.accept?
-          print "Client connection accepted from ", client.remote_address, "\n"
-          begin
-            ssl_client = OpenSSL::SSL::Socket::Server.new(client, context, sync_close: true)
-            ssl_client.sync = true
-            spawn handle_connection(ssl_client, client.remote_address)
-          rescue e : OpenSSL::SSL::Error
-            print "Error accepting OpenSSL connection from ", client.remote_address, ": ", e.message, "\n"
+        until @closing
+          if client = @socket.accept?
+            print "Client connection accepted from ", client.remote_address, "\n"
+            begin
+              ssl_client = OpenSSL::SSL::Socket::Server.new(client, context, sync_close: true)
+              ssl_client.sync = true
+              spawn handle_connection(ssl_client, client.remote_address)
+            rescue e : OpenSSL::SSL::Error
+              print "Error accepting OpenSSL connection from ", client.remote_address, ": ", e.message, "\n"
+            end
+          else
+            break
           end
-        else
-          break
         end
       end
     end
 
     def close
       @closing = true
-      @socket.close
     end
 
     def handle_connection(socket, remote_address)

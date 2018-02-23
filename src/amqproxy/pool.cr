@@ -1,6 +1,6 @@
 module AMQProxy
   class Pool
-    def initialize(@max_size : Int32, @host : String, @port : Int32, @tls : Bool)
+    def initialize(@host : String, @port : Int32, @tls : Bool)
       @pools = {} of String => Deque(Upstream)
     end
 
