@@ -25,7 +25,7 @@ module AMQProxy
         @channel.send frame
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      puts "Client conn closed #{ex.inspect}"
+      #print "Decoding client frames ", ex.inspect_with_backtrace, "\n"
       @channel.send nil
     end
 

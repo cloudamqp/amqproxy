@@ -4,27 +4,33 @@ require "uri"
 
 module AMQProxy
   class Upstream
-    def initialize(@host : String, @port : Int32, @tls : Bool, @user : String, @password : String, @vhost : String)
+    def initialize(@host : String, @port : Int32, @tls : Bool)
       @socket = uninitialized IO
       @outbox = Channel(AMQP::Frame?).new
       @open_channels = Set(UInt16).new
-      connect!
-      spawn decode_frames
     end
 
-    def connect!
+    def connect(user : String, password : String, vhost : String)
       tcp_socket = TCPSocket.new(@host, @port)
-      @socket = if @tls
-                  context = OpenSSL::SSL::Context::Client.new
-                  OpenSSL::SSL::Socket::Client.new(tcp_socket, context)
-                else
-                  tcp_socket
-                end
-      negotiate_server
       print "Connected to upstream ", tcp_socket.remote_address, "\n"
+      @socket =
+        if @tls
+          OpenSSL::SSL::Socket::Client.new(tcp_socket, hostname: @host).tap do |c|
+            c.sync_close = c.sync = true
+          end
+        else
+          tcp_socket
+        end
+      start(user, password, vhost)
+      spawn decode_frames
+      self
+    rescue ex : IO::EOFError
+      puts "Upstream connection failed to #{user}@#{@host}:#{@port}/#{vhost}"
+      ex.inspect_with_backtrace(STDERR)
+      nil
     end
 
-    def decode_frames
+    private def decode_frames
       loop do
         frame = AMQP::Frame.decode @socket
         case frame
@@ -67,19 +73,25 @@ module AMQProxy
       end
     end
 
-    private def negotiate_server
+    private def start(user, password, vhost)
       @socket.write AMQP::PROTOCOL_START
 
       start = AMQP::Frame.decode(@socket).as(AMQP::Connection::Start)
 
-      start_ok = AMQP::Connection::StartOk.new(response: "\u0000#{@user}\u0000#{@password}")
+      props = {
+        "capabilities" => {
+          "authentication_failure_close" => true
+        } of String => AMQP::Field
+      } of String => AMQP::Field
+      start_ok = AMQP::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
+                                               client_props: props)
       @socket.write start_ok.to_slice
 
       tune = AMQP::Frame.decode(@socket).as(AMQP::Connection::Tune)
       tune_ok = AMQP::Connection::TuneOk.new(tune.channel_max, tune.frame_max, 0_u16)
       @socket.write tune_ok.to_slice
 
-      open = AMQP::Connection::Open.new(vhost: @vhost)
+      open = AMQP::Connection::Open.new(vhost: vhost)
       @socket.write open.to_slice
 
       open_ok = AMQP::Frame.decode(@socket).as(AMQP::Connection::OpenOk)

@@ -26,8 +26,7 @@ module AMQProxy
     def listen
       until @closing
         if client = @socket.accept?
-          print "Client connection accepted from ", client.remote_address, "\n"
-          spawn handle_connection(client)
+          spawn handle_connection(client, client.remote_address)
         else
           break
         end
@@ -45,7 +44,7 @@ module AMQProxy
           begin
             ssl_client = OpenSSL::SSL::Socket::Server.new(client, context, sync_close: true)
             ssl_client.sync = true
-            spawn handle_connection(ssl_client)
+            spawn handle_connection(ssl_client, client.remote_address)
           rescue e : OpenSSL::SSL::Error
             print "Error accepting OpenSSL connection from ", client.remote_address, ": ", e.message, "\n"
           end
@@ -60,37 +59,36 @@ module AMQProxy
       @socket.close
     end
 
-    def handle_connection(socket)
+    def handle_connection(socket, remote_address)
       c = Client.new(socket)
+      print "Client connection accepted from ", remote_address, "\n"
       @pool.borrow(c.user, c.password, c.vhost) do |u|
-        begin
-          loop do
-            idx, frame = Channel.select([u.next_frame, c.next_frame])
-            case idx
-            when 0
-              break if frame.nil?
-              c.write frame.to_slice
-            when 1
-              if frame.nil?
-                u.close_all_open_channels
-                break
-              else
-                u.write frame.to_slice
-              end
+        if u.nil?
+          c.write AMQP::Connection::Close.new(403_u16, "ACCESS_REFUSED", 0_u16, 0_u16).to_slice
+          next
+        end
+        loop do
+          idx, frame = Channel.select([u.next_frame, c.next_frame])
+          case idx
+          when 0 # Upstream frame
+            if frame.nil?
+              c.write AMQP::Connection::Close.new(302_u16, "Connection to upstream closed", 0_u16, 0_u16).to_slice
+              break
             end
+            c.write frame.to_slice
+          when 1 # Client frame
+            if frame.nil?
+              u.close_all_open_channels
+              break
+            end
+            u.write frame.to_slice
           end
-        rescue ex : IO::EOFError | Errno
-          puts "Client loop #{ex.inspect}"
-        ensure
-          puts "Client connection closed"
-          socket.close
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      print "Client loop #{ex.inspect}"
+      print "Client connection error from ", remote_address, ": ", ex.inspect_with_backtrace, "\n"
     ensure
-      #print "Client connection closed from ", socket.remote_address, "\n"
-      puts "Closing client conn"
+      print "Client connection closed from ", remote_address, "\n"
       socket.close
     end
   end
