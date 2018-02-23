@@ -12,6 +12,6 @@ development_dependencies:
   amqp:
     github: cloudamqp/amqp.cr
 
-crystal: 0.21.1
+crystal: 0.24.1
 
 license: MIT
