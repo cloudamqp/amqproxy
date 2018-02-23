@@ -2,7 +2,7 @@ name: amqproxy
 version: 0.1.0
 
 authors:
-  - Carl Hörberg <carl@cloudamqp.com>
+  - CloudAMQP <contact@cloudamqp.com>
 
 targets:
   amqproxy:

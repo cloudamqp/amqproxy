@@ -1,6 +1,6 @@
 # AMQProxy
 
-An intelligent AMQP proxy, with AMQP connection pooling/reusing etc. Allows PHP clients to keep long lived connections to upstream servers.
+An intelligent AMQP proxy with AMQP connection pooling/reusing. Allows PHP clients to keep long lived connections to upstream servers, doubling publishing speed.
 
 ## Installation
 
