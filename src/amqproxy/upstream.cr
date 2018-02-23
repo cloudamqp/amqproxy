@@ -4,18 +4,7 @@ require "uri"
 
 module AMQProxy
   class Upstream
-    def initialize(url : String, default_prefetch : UInt16)
-      uri = URI.parse url
-      @tls = (uri.scheme == "amqps").as(Bool)
-      @host = uri.host || "localhost"
-      @port = uri.port || (@tls ? 5671 : 5672)
-      @user = uri.user || "guest"
-      @password = uri.password || "guest"
-      path = uri.path || ""
-      @vhost = path.empty? ? "/" : path[1..-1]
-
-      @default_prefetch = default_prefetch
-
+    def initialize(@host : String, @port : Int32, @tls : Bool, @user : String, @password : String, @vhost : String)
       @socket = uninitialized IO
       @outbox = Channel(AMQP::Frame?).new
       @open_channels = Set(UInt16).new
@@ -40,7 +29,9 @@ module AMQProxy
         frame = AMQP::Frame.decode @socket
         case frame
         when AMQP::Channel::OpenOk
-          @open_channels << frame.channel
+          @open_channels.add(frame.channel)
+        when AMQP::Channel::CloseOk
+          @open_channels.delete(frame.channel)
         end
         @outbox.send frame
       end
@@ -71,8 +62,8 @@ module AMQProxy
     def close_all_open_channels
       @open_channels.each do |ch|
         puts "Closing client channel #{ch}"
-        @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
-        close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
+        write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
+        #close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
       end
     end
 
@@ -85,10 +76,7 @@ module AMQProxy
       @socket.write start_ok.to_slice
 
       tune = AMQP::Frame.decode(@socket).as(AMQP::Connection::Tune)
-
-      channel_max = tune.as(AMQP::Connection::Tune).channel_max
-      frame_max = tune.as(AMQP::Connection::Tune).frame_max
-      tune_ok = AMQP::Connection::TuneOk.new(channel_max, frame_max, 0_u16)
+      tune_ok = AMQP::Connection::TuneOk.new(tune.channel_max, tune.frame_max, 0_u16)
       @socket.write tune_ok.to_slice
 
       open = AMQP::Connection::Open.new(vhost: @vhost)

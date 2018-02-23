@@ -1,5 +1,6 @@
 require "socket"
 require "openssl"
+require "uri"
 require "./amqp"
 require "./pool"
 require "./client"
@@ -10,13 +11,14 @@ module AMQProxy
     @closing = false
 
     def initialize(config : Hash(String, Hash(String, String)))
-      puts "Proxy upstream: #{config["server"]["upstream"]}"
-
-      @pool = Pool(Upstream).new(config["server"]["maxConnections"].to_i) do
-        Upstream.new(config["server"]["upstream"], config["server"].fetch("defaultPrefetch", "0").to_u16)
-      end
-
+      upstream = config["server"]["upstream"]
+      u = URI.parse upstream
+      tls = u.scheme == "amqps"
+      port = u.port || (tls ? 5671 : 5672)
+      max_connections = config["server"]["maxConnections"].to_i
       listen = config["listen"]
+      puts "Proxy upstream: #{config["server"]["upstream"]}"
+      @pool = Pool.new(max_connections, u.host || "", port, tls)
       @socket = TCPServer.new(listen["address"], listen["port"].to_i)
       puts "Proxy listening on #{@socket.local_address}"
     end
@@ -59,21 +61,21 @@ module AMQProxy
     end
 
     def handle_connection(socket)
-      client = Client.new(socket)
-      @pool.borrow do |upstream|
+      c = Client.new(socket)
+      @pool.borrow(c.user, c.password, c.vhost) do |u|
         begin
           loop do
-            idx, frame = Channel.select([upstream.next_frame, client.next_frame])
+            idx, frame = Channel.select([u.next_frame, c.next_frame])
             case idx
             when 0
               break if frame.nil?
-              client.write frame.to_slice
+              c.write frame.to_slice
             when 1
               if frame.nil?
-                upstream.close_all_open_channels
+                u.close_all_open_channels
                 break
               else
-                upstream.write frame.to_slice
+                u.write frame.to_slice
               end
             end
           end

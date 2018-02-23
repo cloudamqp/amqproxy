@@ -1,39 +1,21 @@
 module AMQProxy
-  class Pool(T)
-    def initialize(@max_size : Int32, min_size = 0, &create : -> T)
-      @pool = Channel::Buffered(T).new(@max_size)
-      @create = create
-      @size = 0
-      @borrowed = 0
-      min_size.times do
-        spawn increase_pool
-      end
+  class Pool
+    def initialize(@max_size : Int32, @host : String, @port : Int32, @tls : Bool)
+      @pools = {} of String => Deque(Upstream)
     end
 
-    def increase_pool
-      @size += 1
-      @pool.send @create.call
-    end
-
-    def borrow(&block : T -> _)
-      @borrowed += 1
-      if @size <= @borrowed && @size < @max_size
-        spawn increase_pool
-      end
-
-      s = @pool.receive
+    def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
+      q = @pools[[user, password, vhost].join] ||= Deque(Upstream).new
+      s = q.shift { Upstream.new(@host, @port, @tls, user, password, vhost) }
       block.call s
     ensure
       if s.nil?
         puts "Socket is nil"
-        @size -= 1
       elsif s.closed?
         puts "Socket closed when returned"
-        @size -= 1
       else
-        @pool.send s
+        q.try { |q| q.push s }
       end
-      @borrowed -= 1
     end
   end
 end
