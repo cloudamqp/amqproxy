@@ -6,7 +6,7 @@ module AMQProxy
   class Upstream
     def initialize(@host : String, @port : Int32, @tls : Bool)
       @socket = uninitialized IO
-      @to_client = Channel(AMQP::Frame?).new
+      @to_client = Channel(AMQP::Frame?).new(1)
       @open_channels = Set(UInt16).new
       @unsafe_channels = Set(UInt16).new
     end
@@ -37,8 +37,10 @@ module AMQProxy
         frame = AMQP::Frame.decode @socket
         case frame
         when AMQP::Channel::OpenOk
+          puts "upstream openok"
           @open_channels.add(frame.channel)
         when AMQP::Channel::CloseOk
+          puts "upstream closeok"
           @open_channels.delete(frame.channel)
         end
         @to_client.send frame
@@ -66,12 +68,15 @@ module AMQProxy
           @to_client.send AMQP::Channel::OpenOk.new(frame.channel)
           return
         else
-          puts "Can't reuse channel #{frame.channel}"
+          puts "Channel #{frame.channel} not open"
         end
       when AMQP::Channel::Close
-        unless @unsafe_channels.includes? frame.channel
-          puts "Not close channel #{frame.channel} at upstream"
+        if @unsafe_channels.includes? frame.channel
+          puts "channel #{frame.channel} is unsafe, closing it"
+        else
+          puts "Dont close channel #{frame.channel} at upstream"
           @to_client.send AMQP::Channel::CloseOk.new(frame.channel)
+          puts "sent closeOk for #{frame.channel} to client"
           return
         end
       end
@@ -95,6 +100,10 @@ module AMQProxy
           puts "Closing unsafe channel #{ch}"
           @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
           close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
+          @open_channels.delete(ch)
+          @unsafe_channels.delete(ch)
+        else
+          puts "Client disconnected, but not closing safe channel #{ch}"
         end
       end
     end

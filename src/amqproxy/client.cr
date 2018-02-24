@@ -9,7 +9,7 @@ module AMQProxy
 
     def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
       @vhost, @user, @password = negotiate_client(@socket)
-      @outbox = Channel(AMQP::Frame?).new
+      @outbox = Channel(AMQP::Frame?).new(1)
       spawn decode_frames
     end
 
@@ -19,7 +19,7 @@ module AMQProxy
         @outbox.send frame
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      print "Decoding client frames ", ex.inspect_with_backtrace, "\n"
+      #print "Decoding client frames ", ex.inspect_with_backtrace, "\n"
       @outbox.send nil
     end
 

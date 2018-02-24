@@ -69,14 +69,14 @@ module AMQProxy
         loop do
           idx, frame = Channel.select([u.next_frame, c.next_frame])
           case idx
-          when 0 # Upstream frame
+          when 0 # Frame from upstream, to client
             if frame.nil?
               c.write AMQP::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
                                                   0_u16, 0_u16)
               break
             end
             c.write frame
-          when 1 # Client frame
+          when 1 # Frame from client, to upstream
             if frame.nil?
               u.client_disconnected
               break

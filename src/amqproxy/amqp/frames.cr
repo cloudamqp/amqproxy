@@ -446,7 +446,6 @@ module AMQProxy
 
         def initialize(@method_id : UInt16, channel, @body : Bytes)
           super(channel)
-          puts "GenericBasic method_id: #{@method_id}"
         end
 
         def to_slice
