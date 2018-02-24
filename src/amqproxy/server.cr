@@ -40,8 +40,8 @@ module AMQProxy
           if client = @socket.accept?
             print "Client connection accepted from ", client.remote_address, "\n"
             begin
-              ssl_client = OpenSSL::SSL::Socket::Server.new(client, context, sync_close: true)
-              ssl_client.sync = true
+              ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
+              ssl_client.sync_close = ssl_client.sync = true
               spawn handle_connection(ssl_client, client.remote_address)
             rescue e : OpenSSL::SSL::Error
               print "Error accepting OpenSSL connection from ", client.remote_address, ": ", e.message, "\n"
@@ -62,7 +62,8 @@ module AMQProxy
       print "Client connection accepted from ", remote_address, "\n"
       @pool.borrow(c.user, c.password, c.vhost) do |u|
         if u.nil?
-          c.write AMQP::Connection::Close.new(403_u16, "ACCESS_REFUSED", 0_u16, 0_u16).to_slice
+          c.write AMQP::Connection::Close.new(403_u16, "ACCESS_REFUSED",
+                                              0_u16, 0_u16)
           next
         end
         loop do
@@ -70,21 +71,23 @@ module AMQProxy
           case idx
           when 0 # Upstream frame
             if frame.nil?
-              c.write AMQP::Connection::Close.new(302_u16, "Connection to upstream closed", 0_u16, 0_u16).to_slice
+              c.write AMQP::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
+                                                  0_u16, 0_u16)
               break
             end
-            c.write frame.to_slice
+            c.write frame
           when 1 # Client frame
             if frame.nil?
-              u.close_all_open_channels
+              u.client_disconnected
               break
             end
-            u.write frame.to_slice
+            u.write frame
           end
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      print "Client connection error from ", remote_address, ": ", ex.inspect_with_backtrace, "\n"
+      print "Client connection error from ", remote_address, ": ",
+        ex.inspect_with_backtrace, "\n"
     ensure
       print "Client connection closed from ", remote_address, "\n"
       socket.close

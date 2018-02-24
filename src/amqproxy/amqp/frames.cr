@@ -434,7 +434,23 @@ module AMQProxy
         case method_id
         when 10_u16 then Qos.decode(channel, body)
         when 11_u16 then QosOk.decode(channel, body)
-        else GenericFrame.new(Type::Method, channel, body.to_slice)
+        else GenericBasic.new(method_id, channel,
+                              body.to_slice[body.pos, body.size - body.pos])
+        end
+      end
+
+      class GenericBasic < Basic
+        def method_id
+          @method_id
+        end
+
+        def initialize(@method_id : UInt16, channel, @body : Bytes)
+          super(channel)
+          puts "GenericBasic method_id: #{@method_id}"
+        end
+
+        def to_slice
+          super(@body)
         end
       end
 

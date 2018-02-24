@@ -6,8 +6,9 @@ module AMQProxy
   class Upstream
     def initialize(@host : String, @port : Int32, @tls : Bool)
       @socket = uninitialized IO
-      @outbox = Channel(AMQP::Frame?).new
+      @to_client = Channel(AMQP::Frame?).new
       @open_channels = Set(UInt16).new
+      @unsafe_channels = Set(UInt16).new
     end
 
     def connect(user : String, password : String, vhost : String)
@@ -30,6 +31,7 @@ module AMQProxy
       nil
     end
 
+    # Frames from upstream (to client)
     private def decode_frames
       loop do
         frame = AMQP::Frame.decode @socket
@@ -39,22 +41,44 @@ module AMQProxy
         when AMQP::Channel::CloseOk
           @open_channels.delete(frame.channel)
         end
-        @outbox.send frame
+        @to_client.send frame
       end
     rescue ex : Errno | IO::EOFError
       print "proxy decode frame: ", ex.message, "\n"
-      @outbox.send nil
+      @to_client.send nil
     end
 
     def next_frame
-      @outbox.receive_select_action
+      @to_client.receive_select_action
     end
 
-    def write(bytes : Slice(UInt8))
-      @socket.write bytes
+    # Frames from client (to upstream)
+    def write(frame : AMQP::Frame)
+      case frame
+      when AMQP::Basic
+        @unsafe_channels.add(frame.channel) if frame.method_id != 40
+      when AMQP::Connection::Close
+        @to_client.send AMQP::Connection::CloseOk.new
+        return
+      when AMQP::Channel::Open
+        if @open_channels.includes? frame.channel
+          puts "Reusing channel #{frame.channel}"
+          @to_client.send AMQP::Channel::OpenOk.new(frame.channel)
+          return
+        else
+          puts "Can't reuse channel #{frame.channel}"
+        end
+      when AMQP::Channel::Close
+        unless @unsafe_channels.includes? frame.channel
+          puts "Not close channel #{frame.channel} at upstream"
+          @to_client.send AMQP::Channel::CloseOk.new(frame.channel)
+          return
+        end
+      end
+      @socket.write frame.to_slice
     rescue ex : Errno | IO::EOFError
       puts "proxy write bytes: #{ex.message}"
-      @outbox.send nil
+      @to_client.send nil
     end
 
     def close
@@ -65,11 +89,13 @@ module AMQProxy
       @socket.closed?
     end
 
-    def close_all_open_channels
+    def client_disconnected
       @open_channels.each do |ch|
-        puts "Closing client channel #{ch}"
-        write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
-        #close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
+        if @unsafe_channels.includes? ch
+          puts "Closing unsafe channel #{ch}"
+          @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
+          close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
+        end
       end
     end
 
