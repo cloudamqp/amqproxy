@@ -115,7 +115,7 @@ module AMQProxy
         "product" => "AMQProxy",
         "version" => AMQProxy::VERSION,
         "capabilities" => {
-          "authentication_failure_close" => true
+          "authentication_failure_close" => false
         } of String => AMQP::Field
       } of String => AMQP::Field
       start_ok = AMQP::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
