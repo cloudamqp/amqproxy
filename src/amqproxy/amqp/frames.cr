@@ -434,6 +434,7 @@ module AMQProxy
         case method_id
         when 10_u16 then Qos.decode(channel, body)
         when 11_u16 then QosOk.decode(channel, body)
+        when 70_u16 then Get.decode(channel, body)
         else GenericBasic.new(method_id, channel,
                               body.to_slice[body.pos, body.size - body.pos])
         end
@@ -492,6 +493,34 @@ module AMQProxy
 
         def self.decode(channel, io)
           self.new(channel)
+        end
+      end
+
+      class Get < Basic
+        def method_id
+          70_u16
+        end
+
+        getter reserved1, queue, no_ack
+
+        def initialize(channel : UInt16, @reserved1 : UInt16,
+                       @queue : String, @no_ack : Bool)
+          super(channel)
+        end
+
+        def to_slice
+          io = AMQP::IO.new(2 + 1 + @queue.size + 1)
+          io.write_int @reserved1
+          io.write_short_string @queue
+          io.write_bool @no_ack
+          super(io.to_slice)
+        end
+
+        def self.decode(channel, io)
+          reserved1 = io.read_uint16
+          queue = io.read_short_string
+          no_ack = io.read_bool
+          self.new(channel, reserved1, queue, no_ack)
         end
       end
     end

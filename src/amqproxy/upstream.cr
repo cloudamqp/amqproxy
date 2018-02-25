@@ -54,11 +54,19 @@ module AMQProxy
       @to_client.receive_select_action
     end
 
+    SAFE_BASIC_METHODS = [40, 10]
+
     # Frames from client (to upstream)
     def write(frame : AMQP::Frame)
       case frame
+      when AMQP::Basic::Get
+        unless frame.no_ack
+          @unsafe_channels.add(frame.channel)
+        end
       when AMQP::Basic
-        @unsafe_channels.add(frame.channel) if frame.method_id != 40
+        unless SAFE_BASIC_METHODS.includes? frame.method_id
+          @unsafe_channels.add(frame.channel)
+        end
       when AMQP::Connection::Close
         @to_client.send AMQP::Connection::CloseOk.new
         return
