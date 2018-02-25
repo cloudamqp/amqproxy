@@ -8,6 +8,8 @@ This proxy server, if run on the same machine as the client can save all that la
 
 Only "safe" channels are reused, e.g. channels where only Basic Publish or Basic Get (with no_ack) has occurred. Any channels who has subscribed to a queue will be closed when the client disconnects. However, the connection to the upstream AMQP server are always kept open and can be reused.
 
+In our benchmarks publishing one message per connection to a server (using TLS) with a round-trip latency of 50ms, takes on avarage 0.01s using the proxy and 0.50s without.
+
 ## Installation
 
 [Install Crystal](https://crystal-lang.org/docs/installation/)
