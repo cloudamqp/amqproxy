@@ -31,7 +31,6 @@ module AMQProxy
         type = Type.new(t)
         channel = mem.read_bytes(UInt16, IO::ByteFormat::BigEndian)
         size = mem.read_bytes(UInt32, IO::ByteFormat::BigEndian)
-        #puts "type=#{type} channel=#{channel} size=#{size}"
 
         payload = Bytes.new(size + 1)
         io.read_fully(payload)
@@ -102,7 +101,6 @@ module AMQProxy
          when 60_u16 then Basic.decode(channel, body)
           #when 90_u16 then Tx.decode(channel, body)
         else
-          #puts "class-id #{class_id} not implemented yet"
           GenericFrame.new(Type::Method, channel, payload)
         end
       end
