@@ -13,6 +13,7 @@ module AMQProxy
 
     def connect(user : String, password : String, vhost : String)
       tcp_socket = TCPSocket.new(@host, @port)
+      tcp_socket.tcp_nodelay = true
       print "Connected to upstream ", tcp_socket.remote_address, "\n"
       @socket =
         if @tls

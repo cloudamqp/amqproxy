@@ -20,6 +20,7 @@ module AMQProxy
       TCPServer.open(address, port) do |socket|
         socket.keepalive = true
         socket.linger = 0
+        socket.tcp_nodelay = true
         puts "Proxy listening on #{socket.local_address}"
         while @running
           if client = socket.accept?
@@ -35,6 +36,7 @@ module AMQProxy
       TCPServer.open(address, port) do |socket|
         socket.keepalive = true
         socket.linger = 0
+        socket.tcp_nodelay = true
         context = OpenSSL::SSL::Context::Server.new
         context.private_key = key_path
         context.certificate_chain = cert_path
