@@ -7,7 +7,7 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    @closing = false
+    @running = true
 
     def initialize(upstream_host, upstream_port, upstream_tls)
       print "Proxy upstream: #{upstream_host}:#{upstream_port} "
@@ -19,7 +19,7 @@ module AMQProxy
     def listen(address, port)
       TCPServer.open(address, port) do |socket|
         puts "Proxy listening on #{socket.local_address}"
-        until @closing
+        while @running
           if client = socket.accept?
             spawn handle_connection(client, client.remote_address)
           else
@@ -36,7 +36,7 @@ module AMQProxy
         context.private_key = key_path
         context.certificate_chain = cert_path
 
-        until @closing
+        while @running
           if client = @socket.accept?
             print "Client connection accepted from ", client.remote_address, "\n"
             begin
@@ -54,7 +54,7 @@ module AMQProxy
     end
 
     def close
-      @closing = true
+      @running = false
     end
 
     def handle_connection(socket, remote_address)
