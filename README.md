@@ -15,7 +15,7 @@ In our benchmarks publishing one message per connection to a server (using TLS) 
 [Install Crystal](https://crystal-lang.org/docs/installation/)
 
 ```
-shards build --release
+crystal build --release -o bin/amqproxy src/amqproxy.cr
 cp bin/amqproxy /usr/local/bin
 cp extras/amqproxy.service /etc/systemd/systems/
 service start amqproxy
