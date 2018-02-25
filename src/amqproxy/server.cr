@@ -18,6 +18,8 @@ module AMQProxy
 
     def listen(address, port)
       TCPServer.open(address, port) do |socket|
+        socket.keepalive = true
+        socket.linger = 0
         puts "Proxy listening on #{socket.local_address}"
         while @running
           if client = socket.accept?
@@ -31,10 +33,12 @@ module AMQProxy
 
     def listen_tls(address, port, cert_path : String, key_path : String)
       TCPServer.open(address, port) do |socket|
-        puts "Proxy listening on #{socket.local_address}:#{port}"
+        socket.keepalive = true
+        socket.linger = 0
         context = OpenSSL::SSL::Context::Server.new
         context.private_key = key_path
         context.certificate_chain = cert_path
+        puts "Proxy listening on #{socket.local_address}:#{port} (TLS)"
 
         while @running
           if client = @socket.accept?
