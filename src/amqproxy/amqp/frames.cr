@@ -277,6 +277,7 @@ module AMQProxy
           50_u16
         end
 
+        getter reply_code, reply_text, failing_class_id, failing_method_id
         def initialize(@reply_code : UInt16, @reply_text : String, @failing_class_id : UInt16, @failing_method_id : UInt16)
           super()
         end
