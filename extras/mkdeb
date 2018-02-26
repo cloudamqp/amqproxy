@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -eu
+[ $# -eq 1 ] || (echo "usage: $(basename $0) pkg_revision" && exit 1)
+pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VERSION')
+pkg_revision=$1
+name=amqproxy_$pkg_version-$pkg_revision
+
+crystal build -o bin/amqproxy --release src/amqproxy.cr
+
+rm -rf $name
+mkdir -p $name/DEBIAN
+mkdir -p $name/usr/bin
+mkdir -p $name/etc/systemd/system/
+cp bin/amqproxy $name/usr/bin
+cp extras/amqproxy.service $name/etc/systemd/system/
+
+cat > $name/DEBIAN/control << EOF
+Package: amqproxy
+Version: $pkg_version-$pkg_revision
+Homepage: https://github.com/cloudamqp/amqproxy
+Section: contrib
+Priority: optional
+Architecture: any
+Depends: openssl (>= 1.0.1)
+Maintainer: CloudAMQP <contact@cloudamqp.com>
+Description: AMQProxy
+ An intelligent AMQP proxy, with connection and channel pooling/reusing.
+ Useful to vastly increase publishing speed for clients that can't hold
+ long-lived connections to an AMQP server.
+
+EOF
+dpkg-deb --build $name
+rm -r $name
