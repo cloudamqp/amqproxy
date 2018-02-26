@@ -14,6 +14,13 @@ module AMQProxy
       print "TLS" if upstream_tls
       print "\n"
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls)
+      @client_connections = 0
+    end
+
+    getter :client_connections
+
+    def upstream_connections
+      @pool.size
     end
 
     def listen(address, port)
@@ -64,6 +71,7 @@ module AMQProxy
     end
 
     def handle_connection(socket, remote_address)
+      @client_connections += 1
       c = Client.new(socket)
       print "Client connection accepted from ", remote_address, "\n"
       @pool.borrow(c.user, c.password, c.vhost) do |u|
@@ -97,6 +105,7 @@ module AMQProxy
     ensure
       print "Client connection closed from ", remote_address, "\n"
       socket.close
+      @client_connections -= 1
     end
   end
 end
