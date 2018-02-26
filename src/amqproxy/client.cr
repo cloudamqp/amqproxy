@@ -19,7 +19,6 @@ module AMQProxy
         @outbox.send frame
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      #print "Decoding client frames ", ex.inspect_with_backtrace, "\n"
       @outbox.send nil
     end
 
@@ -35,7 +34,6 @@ module AMQProxy
         @outbox.send nil
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      puts "Client conn closed: #{ex.message}"
       @outbox.send nil
     end
 

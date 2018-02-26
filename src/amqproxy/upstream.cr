@@ -4,7 +4,7 @@ require "uri"
 
 module AMQProxy
   class Upstream
-    def initialize(@host : String, @port : Int32, @tls : Bool)
+    def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger)
       @socket = uninitialized IO
       @to_client = Channel(AMQP::Frame?).new(1)
       @open_channels = Set(UInt16).new
@@ -14,7 +14,7 @@ module AMQProxy
     def connect(user : String, password : String, vhost : String)
       tcp_socket = TCPSocket.new(@host, @port)
       tcp_socket.tcp_nodelay = true
-      print "Connected to upstream ", tcp_socket.remote_address, "\n"
+      @log.info { "Connected to upstream #{tcp_socket.remote_address}" }
       @socket =
         if @tls
           OpenSSL::SSL::Socket::Client.new(tcp_socket, hostname: @host).tap do |c|
@@ -27,8 +27,7 @@ module AMQProxy
       spawn decode_frames
       self
     rescue ex : IO::EOFError
-      puts "Upstream connection failed to #{user}@#{@host}:#{@port}/#{vhost}"
-      ex.inspect_with_backtrace(STDERR)
+      @log.error "Failed connecting to upstream #{user}@#{@host}:#{@port}/#{vhost}"
       nil
     end
 
@@ -46,7 +45,7 @@ module AMQProxy
         @to_client.send frame
       end
     rescue ex : Errno | IO::EOFError
-      print "Error on upstream socket: ", ex.inspect, "\n"
+      @log.error "Error reading from upstream: #{ex.inspect}"
       @to_client.send nil
     end
 
@@ -83,7 +82,7 @@ module AMQProxy
       end
       @socket.write frame.to_slice
     rescue ex : Errno | IO::EOFError
-      puts "proxy write bytes: #{ex.message}"
+      @log.error "Error sending to upstream: #{ex.inspect}"
       @to_client.send nil
     end
 
