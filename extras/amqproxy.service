@@ -5,7 +5,7 @@ Requires=network.target
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/amqproxy 127.0.0.1:5672
+ExecStart=/usr/bin/amqproxy 127.0.0.1:5672
 Restart=on-failure
 User=nobody
 Group=nogroup
