@@ -1,0 +1,9 @@
+#!/bin/sh
+rm -rf amqproxy
+mkdir amqproxy
+crystal build -o amqproxy/amqproxy --release src/amqproxy.cr
+rm amqproxy/amqproxy.dwarf
+cp README.md amqproxy/
+pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VERSION')
+tar zcvf amqproxy-$pkg_version-osx.tar.gz amqproxy/*
+rm -r amqproxy

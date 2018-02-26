@@ -5,3 +5,4 @@
 /.vagrant/
 *.log
 *.deb
+*.tar.gz
