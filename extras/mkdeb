@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -eu
 [ $# -eq 1 ] || (echo "usage: $(basename $0) pkg_revision" && exit 1)
 pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VERSION')
@@ -20,8 +20,8 @@ Version: $pkg_version-$pkg_revision
 Homepage: https://github.com/cloudamqp/amqproxy
 Section: contrib
 Priority: optional
-Architecture: any
-Depends: openssl (>= 1.0.1)
+Architecture: $(dpkg --print-architecture)
+Depends: openssl (>= 1.0.1), systemd
 Maintainer: CloudAMQP <contact@cloudamqp.com>
 Description: AMQProxy
  An intelligent AMQP proxy, with connection and channel pooling/reusing.
@@ -29,5 +29,21 @@ Description: AMQProxy
  long-lived connections to an AMQP server.
 
 EOF
+
+cat > $name/DEBIAN/postinst << EOF
+#!/bin/sh -e
+systemctl --system daemon-reload
+systemctl enable amqproxy
+systemctl restart amqproxy
+EOF
+chmod +x $name/DEBIAN/postinst
+
+cat > $name/DEBIAN/prerm << EOF
+#!/bin/sh -e
+systemctl stop amqproxy
+systemctl disable amqproxy
+EOF
+chmod +x $name/DEBIAN/prerm
+
 dpkg-deb --build $name
 rm -r $name
