@@ -10,19 +10,29 @@ Only "safe" channels are reused, that is channels where only Basic Publish or Ba
 
 In our benchmarks publishing one message per connection to a server (using TLS) with a round-trip latency of 50ms, takes on avarage 0.01s using the proxy and 0.50s without.
 
-## Installation
+## Installation (from source)
 
 [Install Crystal](https://crystal-lang.org/docs/installation/)
 
 ```
 crystal build --release -o bin/amqproxy src/amqproxy.cr
-cp bin/amqproxy /usr/local/bin
+cp bin/amqproxy /usr/bin
 cp extras/amqproxy.service /etc/systemd/systems/
-service start amqproxy
+systemctl enable amqproxy
+systemctl start amqproxy
 ```
 
 You probably want to modify `/etc/systemd/systems/amqproxy.service` and configure another upstream host.
 
+## Installation (from binary package)
+
+Download deb-package or any of the tar.gz packages with compiled binaries from the [Releases page](https://github.com/cloudamqp/amqproxy/releases).
+
+Requirements OS X:
+
+`brew install openssl@1.1 bdw-gc libevent`
+
+Requirements Linux: OpenSSL
 
 ## Usage
 
