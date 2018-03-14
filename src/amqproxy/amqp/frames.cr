@@ -1,6 +1,6 @@
 module AMQProxy
   module AMQP
-    abstract class Frame
+    abstract struct Frame
       getter type, channel
       def initialize(@type : Type, @channel : UInt16)
       end
@@ -50,7 +50,7 @@ module AMQProxy
       end
     end
 
-    class GenericFrame < Frame
+    struct GenericFrame < Frame
       def initialize(@type : Type, @channel : UInt16,  @body : Bytes)
       end
 
@@ -59,7 +59,7 @@ module AMQProxy
       end
     end
 
-    class HeartbeatFrame < Frame
+    struct HeartbeatFrame < Frame
       def initialize
         @type = Type::Heartbeat
         @channel = 0_u16
@@ -74,7 +74,7 @@ module AMQProxy
       end
     end
 
-    abstract class MethodFrame < Frame
+    abstract struct MethodFrame < Frame
       def initialize(@channel : UInt16)
         @type = Type::Method
       end
@@ -106,7 +106,7 @@ module AMQProxy
       end
     end
 
-    abstract class Connection < MethodFrame
+    abstract struct Connection < MethodFrame
       def class_id
         10_u16
       end
@@ -130,7 +130,7 @@ module AMQProxy
         end
       end
 
-      class Start < Connection
+      struct Start < Connection
         def method_id
           10_u16
         end
@@ -161,7 +161,7 @@ module AMQProxy
         end
       end
 
-      class StartOk < Connection
+      struct StartOk < Connection
         getter client_props, mechanism, response, locale
 
         def method_id
@@ -191,7 +191,7 @@ module AMQProxy
         end
       end
 
-      class Tune < Connection
+      struct Tune < Connection
         getter channel_max, frame_max, heartbeat
         def method_id
           30_u16
@@ -217,13 +217,33 @@ module AMQProxy
         end
       end
 
-      class TuneOk < Tune
+      struct TuneOk < Connection
+        getter channel_max, frame_max, heartbeat
         def method_id
           31_u16
         end
+
+        def initialize(@channel_max : UInt16, @frame_max : UInt32, @heartbeat : UInt16)
+          super()
+        end
+
+        def to_slice
+          body = AMQP::IO.new(2 + 4 + 2)
+          body.write_int(@channel_max)
+          body.write_int(@frame_max)
+          body.write_int(@heartbeat)
+          super(body.to_slice)
+        end
+
+        def self.decode(io)
+          channel_max = io.read_uint16
+          frame_max = io.read_uint32
+          heartbeat = io.read_uint16
+          self.new(channel_max, frame_max, heartbeat)
+        end
       end
 
-      class Open < Connection
+      struct Open < Connection
         getter vhost, reserved1, reserved2
         def method_id
           40_u16
@@ -249,7 +269,7 @@ module AMQProxy
         end
       end
 
-      class OpenOk < Connection
+      struct OpenOk < Connection
         getter reserved1
 
         def method_id
@@ -272,7 +292,7 @@ module AMQProxy
         end
       end
 
-      class Close < Connection
+      struct Close < Connection
         def method_id
           50_u16
         end
@@ -300,7 +320,7 @@ module AMQProxy
         end
       end
 
-      class CloseOk < Connection
+      struct CloseOk < Connection
         def method_id
           51_u16
         end
@@ -315,7 +335,7 @@ module AMQProxy
       end
     end
 
-    abstract class Channel < MethodFrame
+    abstract struct Channel < MethodFrame
       def class_id
         20_u16
       end
@@ -333,7 +353,7 @@ module AMQProxy
         end
       end
 
-      class Open < Channel
+      struct Open < Channel
         def method_id
           10_u16
         end
@@ -356,7 +376,7 @@ module AMQProxy
         end
       end
 
-      class OpenOk < Channel
+      struct OpenOk < Channel
         def method_id
           11_u16
         end
@@ -379,7 +399,7 @@ module AMQProxy
         end
       end
 
-      class Close < Channel
+      struct Close < Channel
         def method_id
           40_u16
         end
@@ -408,7 +428,7 @@ module AMQProxy
         end
       end
 
-      class CloseOk < Channel
+      struct CloseOk < Channel
         def method_id
           41_u16
         end
@@ -423,7 +443,7 @@ module AMQProxy
       end
     end
 
-    abstract class Basic < MethodFrame
+    abstract struct Basic < MethodFrame
       def class_id
         60_u16
       end
@@ -439,7 +459,7 @@ module AMQProxy
         end
       end
 
-      class GenericBasic < Basic
+      struct GenericBasic < Basic
         def method_id
           @method_id
         end
@@ -453,7 +473,7 @@ module AMQProxy
         end
       end
 
-      class Qos < Basic
+      struct Qos < Basic
         def method_id
           10_u16
         end
@@ -481,7 +501,7 @@ module AMQProxy
         end
       end
 
-      class QosOk < Basic
+      struct QosOk < Basic
         def method_id
           11_u16
         end
@@ -495,7 +515,7 @@ module AMQProxy
         end
       end
 
-      class Get < Basic
+      struct Get < Basic
         def method_id
           70_u16
         end
