@@ -5,10 +5,12 @@ require "uri"
 
 listen_address = "::"
 listen_port = 5673
+log_level = Logger::INFO
 p = OptionParser.parse! do |parser|
   parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
   parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is all)") { |p| listen_address = p }
   parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |p| listen_port = p.to_i }
+  parser.on("-d", "--debug", "Verbose logging") { |d| log_level = Logger::DEBUG }
   parser.on("-h", "--help", "Show this help") { abort parser.to_s }
   parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
 end
@@ -27,7 +29,7 @@ default_port =
 port = u.port || default_port
 tls = u.scheme == "amqps"
 
-server = AMQProxy::Server.new(u.host || "", port, tls)
+server = AMQProxy::Server.new(u.host || "", port, tls, log_level)
 
 shutdown = -> (s : Signal) do
   server.close
