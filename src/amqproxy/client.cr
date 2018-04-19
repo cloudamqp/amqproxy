@@ -51,8 +51,20 @@ module AMQProxy
       socket.write start.to_slice
 
       start_ok = AMQP::Frame.decode(socket).as(AMQP::Connection::StartOk)
-      response = start_ok.response
-      _, user, password = response.split("\u0000")
+      user = password = ""
+      case start_ok.mechanism
+      when "PLAIN"
+        resp = start_ok.response
+        i = resp.index('\u0000', 1).not_nil!
+        user = resp[1...i]
+        password = resp[(i + 1)..-1]
+      when "AMQPLAIN"
+        io = AMQP::IO.new(start_ok.response.to_slice)
+        tbl = io.read_table(io.size.to_u32)
+        user = tbl["LOGIN"].as(String)
+        password = tbl["PASSWORD"].as(String)
+      else "Unsupported authentication mechanism: #{start_ok.mechanism}"
+      end
 
       tune = AMQP::Connection::Tune.new(frame_max: 4096_u32, channel_max: 0_u16, heartbeat: 600_u16)
       socket.write tune.to_slice

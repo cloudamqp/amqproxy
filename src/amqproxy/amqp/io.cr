@@ -55,9 +55,9 @@ module AMQProxy
         b
       end
 
-      def read_table
+      def read_table(size : UInt32? = nil)
         start_pos = pos
-        size = read_bytes(UInt32, IO::ByteFormat::BigEndian) + 4
+        size ||= read_bytes(UInt32, IO::ByteFormat::BigEndian) + 4
         hash = Hash(String, Field).new
         while pos < start_pos + size
           key = read_short_string
