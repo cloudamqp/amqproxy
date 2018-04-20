@@ -17,12 +17,12 @@ In our benchmarks publishing one message per connection to a server (using TLS) 
 ```
 crystal build --release -o bin/amqproxy src/amqproxy.cr
 cp bin/amqproxy /usr/bin
-cp extras/amqproxy.service /etc/systemd/systems/
+cp extras/amqproxy.service /etc/systemd/system/
 systemctl enable amqproxy
 systemctl start amqproxy
 ```
 
-You probably want to modify `/etc/systemd/systems/amqproxy.service` and configure another upstream host.
+You probably want to modify `/etc/systemd/system/amqproxy.service` and configure another upstream host.
 
 ## Installation (from binary package)
 
