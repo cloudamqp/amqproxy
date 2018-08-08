@@ -41,7 +41,7 @@ module AMQProxy
       start = Bytes.new(8)
       bytes = socket.read_fully(start)
 
-      if start != AMQP::PROTOCOL_START
+      if start != AMQP::PROTOCOL_START && start != AMQP::PROTOCOL_START_ALT
         socket.write AMQP::PROTOCOL_START
         socket.close
         raise IO::EOFError.new("Invalid protocol start")
