@@ -1,6 +1,8 @@
 require "socket"
 require "openssl"
 require "logger"
+require "json"
+require "http/server"
 require "./amqp"
 require "./pool"
 require "./client"
@@ -25,6 +27,24 @@ module AMQProxy
 
     def upstream_connections
       @pool.size
+    end
+
+    def healthcheck(address, port)
+      server = HTTP::Server.new do |context|
+        response = JSON.build do |json|
+          json.object do
+            json.field "status", "ok"
+            json.field "upstream_connections", @pool.size
+            json.field "client_connections", @client_connections
+            json.field "upstream", @pool.upstream
+            json.field "ts", Time.now.to_s("%s").to_i
+          end
+        end
+        context.response.content_type = "application/json"
+        context.response.print response
+      end
+      server.bind_tcp address, port
+      spawn server.listen
     end
 
     def listen(address, port)

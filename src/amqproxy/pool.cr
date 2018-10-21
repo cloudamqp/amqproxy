@@ -6,6 +6,10 @@ module AMQProxy
       @size = 0
     end
 
+    def upstream
+      "#{@host}:#{@port}"
+    end
+
     def borrow(user : String, password : String, vhost : String, &block : (Upstream | Nil) -> _)
       q = @pools[[user, password, vhost].join] ||= Deque(Upstream).new
       u = q.shift do
