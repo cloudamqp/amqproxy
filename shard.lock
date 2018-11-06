@@ -2,5 +2,5 @@ version: 1.0
 shards:
   amqp:
     github: cloudamqp/amqp.cr
-    commit: e5388a5dd6dd892be00a2ebf8b0f38e8e7221cea
+    commit: a26227a3f84bec2e6b5997bcb84b25b37f759079
 

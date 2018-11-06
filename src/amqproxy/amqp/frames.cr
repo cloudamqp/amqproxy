@@ -35,8 +35,8 @@ module AMQProxy
         payload = Bytes.new(size + 1)
         io.read_fully(payload)
 
-        frame_end = payload.at(size)
-        if frame_end != 206
+        frame_end = payload[size, 1]
+        if frame_end != Bytes[206]
           raise InvalidFrameEnd.new("Frame-end was #{frame_end.to_s}, expected 206")
         end
         body = payload[0, size]
