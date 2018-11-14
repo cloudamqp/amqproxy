@@ -46,6 +46,7 @@ module AMQProxy
       end
     rescue ex : Errno | IO::EOFError
       @log.error "Error reading from upstream: #{ex.inspect}"
+      close
       @to_client.send nil
     end
 
