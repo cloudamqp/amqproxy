@@ -16,4 +16,24 @@ describe AMQProxy::Server do
     s.upstream_connections.should eq(1)
     s.close
   end
+
+  it "can reconnect if upstream closes" do
+    system "while (nc localhost 5673 -w 1); do sleep 1; done"
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::ERROR)
+    spawn { s.listen("127.0.0.1", 5673) }
+    sleep 0.001
+    AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
+      conn.channel
+      system "rabbitmqctl stop_app"
+    end
+    system "rabbitmqctl start_app"
+    AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
+      conn.channel
+      s.client_connections.should eq(1)
+      s.upstream_connections.should eq(1)
+    end
+    s.client_connections.should eq(0)
+    s.upstream_connections.should eq(1)
+    s.close
+  end
 end
