@@ -99,9 +99,15 @@ module AMQProxy
       @open_channels.each do |ch|
         if @unsafe_channels.includes? ch
           @socket.write AMQP::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16).to_slice
-          close_ok = AMQP::Frame.decode(@socket).as(AMQP::Channel::CloseOk)
-          @open_channels.delete(ch)
-          @unsafe_channels.delete(ch)
+          frame = AMQP::Frame.decode(@socket)
+          case frame
+          when AMQP::Channel::CloseOk
+            @open_channels.delete(ch)
+            @unsafe_channels.delete(ch)
+          else
+            @log.error "When closing channel, got #{frame.class}, closing"
+            @socket.close
+          end
         end
       end
     end
