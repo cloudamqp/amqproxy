@@ -63,7 +63,7 @@ module AMQProxy
           if client = @socket.accept?
             begin
               ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
-              ssl_client.sync_close = ssl_client.sync = true
+              ssl_client.sync_close = true
               spawn handle_connection(ssl_client, client.remote_address)
             rescue e : OpenSSL::SSL::Error
               @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"

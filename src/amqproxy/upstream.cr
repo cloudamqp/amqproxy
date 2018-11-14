@@ -18,7 +18,7 @@ module AMQProxy
       @socket =
         if @tls
           OpenSSL::SSL::Socket::Client.new(tcp_socket, hostname: @host).tap do |c|
-            c.sync_close = c.sync = true
+            c.sync_close = true
           end
         else
           tcp_socket
