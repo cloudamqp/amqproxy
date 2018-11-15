@@ -4,9 +4,9 @@ set -eu
 pkg_revision=$1
 pkg_platform=$(uname -s | tr "[:upper:]" "[:lower:]")-$(uname -m)
 pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VERSION')
+shards build --release
 rm -rf amqproxy
 mkdir amqproxy
-crystal build -o amqproxy/amqproxy --release --no-debug src/amqproxy.cr
-cp README.md amqproxy/
+cp README.md bin/amqproxy amqproxy/
 tar zcvf amqproxy-$pkg_version-$pkg_revision.$pkg_platform.tar.gz amqproxy/*
 rm -r amqproxy

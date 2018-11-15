@@ -5,7 +5,7 @@ pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VER
 pkg_revision=$1
 name=amqproxy_$pkg_version-$pkg_revision
 
-crystal build -o bin/amqproxy --release src/amqproxy.cr
+shards build --release
 
 rm -rf $name
 mkdir -p $name/DEBIAN
