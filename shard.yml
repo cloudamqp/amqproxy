@@ -8,10 +8,14 @@ targets:
   amqproxy:
     main: src/amqproxy.cr
 
+dependencies:
+  amq-protocol:
+    path: ../amq-protocol.cr
+
 development_dependencies:
   amqp:
     github: cloudamqp/amqp.cr
 
-crystal: 0.24.2
+crystal: 0.27.0
 
 license: MIT

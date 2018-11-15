@@ -1,7 +1,7 @@
 require "socket"
 require "openssl"
 require "logger"
-require "./amqp"
+require "amq-protocol"
 require "./pool"
 require "./client"
 require "./upstream"
@@ -85,8 +85,9 @@ module AMQProxy
       @log.info { "Client connection accepted from #{remote_address}" }
       @pool.borrow(c.user, c.password, c.vhost) do |u|
         if u.nil?
-          c.write AMQP::Connection::Close.new(403_u16, "ACCESS_REFUSED",
-                                              0_u16, 0_u16)
+          f = AMQ::Protocol::Frame::Method::Connection::Close.new(403_u16, "ACCESS_REFUSED",
+                                                                   0_u16, 0_u16)
+          f.to_io socket, IO::ByteFormat::NetworkEndian
           next
         end
         loop do
@@ -94,11 +95,12 @@ module AMQProxy
           case idx
           when 0 # Frame from upstream, to client
             if frame.nil?
-              c.write AMQP::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
+              f = AMQ::Protocol::Frame::Method::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
                                                   0_u16, 0_u16)
+              f.to_io socket, IO::ByteFormat::NetworkEndian
               break
             end
-            c.write frame
+            frame.to_io socket, IO::ByteFormat::NetworkEndian
           when 1 # Frame from client, to upstream
             if frame.nil?
               u.client_disconnected
