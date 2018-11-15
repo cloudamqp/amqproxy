@@ -7,6 +7,6 @@ pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VER
 shards build --release
 rm -rf amqproxy
 mkdir amqproxy
-cp README.md bin/amqproxy amqproxy/
+cp LICENSE README.md bin/amqproxy amqproxy/
 tar zcvf amqproxy-$pkg_version-$pkg_revision.$pkg_platform.tar.gz amqproxy/*
 rm -r amqproxy

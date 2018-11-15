@@ -3,47 +3,70 @@ set -eu
 [ $# -eq 1 ] || (echo "usage: $(basename $0) pkg_revision" && exit 1)
 pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VERSION')
 pkg_revision=$1
-name=amqproxy_$pkg_version-$pkg_revision
+root=amqproxy_$pkg_version-$pkg_revision
 
-shards build --release
+shards build --release --production
 
-rm -rf $name
-mkdir -p $name/DEBIAN
-mkdir -p $name/usr/bin
-mkdir -p $name/etc/systemd/system/
-cp bin/amqproxy $name/usr/bin
-cp extras/amqproxy.service $name/etc/systemd/system/
+rm -rf $root
+mkdir -p $root/DEBIAN
+mkdir -p $root/usr/bin
+mkdir -p $root/lib/systemd/system
+mkdir -p $root/usr/share/doc/amqproxy
+mkdir -p $root/usr/share/man/man1
+install -s bin/amqproxy $root/usr/bin
+cp extras/amqproxy.service $root/lib/systemd/system
+cp README.md $root/usr/share/doc/amqproxy/README
 
-cat > $name/DEBIAN/control << EOF
+help2man -Nn "proxy for AMQP connections" bin/amqproxy > $root/usr/share/man/man1/amqproxy.1
+gzip -9 -n $root/usr/share/man/man1/amqproxy.1
+
+cat > $root/usr/share/doc/amqproxy/copyright << EOF
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: AMQProxy
+Upstream-Contact: support@cloudamqp.com
+Source: https://github.com/cloudamqp/amqproxy
+
+Files: *
+Copyright: 2018, 84codes AB
+License: MIT
+EOF
+
+cd $root
+find . -type f -not -path "./DEBIAN/*" | xargs md5sum > DEBIAN/md5sums
+cd - > /dev/null
+
+cat > $root/DEBIAN/control << EOF
 Package: amqproxy
 Version: $pkg_version-$pkg_revision
 Homepage: https://github.com/cloudamqp/amqproxy
-Section: contrib
+Section: net
 Priority: optional
 Architecture: $(dpkg --print-architecture)
-Depends: openssl (>= 1.0.1), systemd
-Maintainer: CloudAMQP <contact@cloudamqp.com>
-Description: AMQProxy
+Depends: openssl (>= 1.0.1), systemd, libc6, adduser
+Maintainer: CloudAMQP <support@cloudamqp.com>
+Description: proxy and connection pool for AMQP connections
  An intelligent AMQP proxy, with connection and channel pooling/reusing.
  Useful to vastly increase publishing speed for clients that can't hold
  long-lived connections to an AMQP server.
 
 EOF
 
-cat > $name/DEBIAN/postinst << EOF
+cat > $root/DEBIAN/postinst << EOF
 #!/bin/sh -e
-systemctl --system daemon-reload
-systemctl enable amqproxy
-systemctl restart amqproxy
+adduser --system --group --quiet --no-create-home --home /nonexistent amqproxy
+deb-systemd-helper enable amqproxy.service
+deb-systemd-invoke start amqproxy.service
 EOF
-chmod +x $name/DEBIAN/postinst
+chmod +x $root/DEBIAN/postinst
 
-cat > $name/DEBIAN/prerm << EOF
+cat > $root/DEBIAN/prerm << EOF
 #!/bin/sh -e
-systemctl stop amqproxy
-systemctl disable amqproxy
+deb-systemd-invoke stop amqproxy.service
+deb-systemd-helper purge amqproxy.service
 EOF
-chmod +x $name/DEBIAN/prerm
+chmod +x $root/DEBIAN/prerm
 
-dpkg-deb --build $name
-rm -r $name
+fakeroot dpkg-deb --build $root
+rm -r $root
+
+lintian $root.deb
