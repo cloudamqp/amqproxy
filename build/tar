@@ -4,7 +4,7 @@ set -eu
 pkg_revision=$1
 pkg_platform=$(uname -s | tr "[:upper:]" "[:lower:]")-$(uname -m)
 pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VERSION')
-shards build --release
+shards build --release --production
 rm -rf amqproxy
 mkdir amqproxy
 cp LICENSE README.md bin/amqproxy amqproxy/
