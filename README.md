@@ -15,7 +15,7 @@ In our benchmarks publishing one message per connection to a server (using TLS) 
 [Install Crystal](https://crystal-lang.org/docs/installation/)
 
 ```
-crystal build --release -o bin/amqproxy src/amqproxy.cr
+shards build --release --production
 cp bin/amqproxy /usr/bin
 cp extras/amqproxy.service /etc/systemd/system/
 systemctl enable amqproxy
@@ -30,7 +30,7 @@ Download deb-package or any of the tar.gz packages with compiled binaries from t
 
 Requirements OS X:
 
-`brew install openssl@1.1 bdw-gc libevent`
+`brew install crystal openssl`
 
 Requirements Linux: OpenSSL
 
@@ -44,3 +44,14 @@ As an example:
 
 Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
 
+## Docker instructions
+
+To run AMQP proxy within a container, build the docker image using the Dockerfile.
+
+Build:
+
+`docker build -t amqproxy .`
+
+Run:
+
+`docker run -e "AMQP_URL=amqp://[RABBITMQ_SERVICE_HOST]:5672" amqproxy`
