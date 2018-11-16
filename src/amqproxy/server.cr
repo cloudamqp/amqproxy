@@ -80,6 +80,7 @@ module AMQProxy
     end
 
     def handle_connection(socket, remote_address)
+      socket.sync = false
       @client_connections += 1
       @log.info { "Client connection accepted from #{remote_address}" }
       c = Client.new(socket)
@@ -98,9 +99,11 @@ module AMQProxy
               f = AMQ::Protocol::Frame::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
                                                   0_u16, 0_u16)
               f.to_io socket, IO::ByteFormat::NetworkEndian
-              break
+              socket.flush
+              next
             end
             frame.to_io socket, IO::ByteFormat::NetworkEndian
+            socket.flush
           when 1 # Frame from client, to upstream
             if frame.nil?
               u.client_disconnected

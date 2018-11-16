@@ -30,6 +30,7 @@ module AMQProxy
 
     def write(frame : AMQP::Frame)
       frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
+      @socket.flush
       case frame
       when AMQP::Connection::CloseOk
         @socket.close
@@ -45,12 +46,14 @@ module AMQProxy
 
       if proto != AMQ::Protocol::PROTOCOL_START_0_9_1 && proto != AMQ::Protocol::PROTOCOL_START_0_9
         socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
+        socket.flush
         socket.close
         raise IO::EOFError.new("Invalid protocol start")
       end
 
       start = AMQ::Protocol::Frame::Connection::Start.new
       start.to_io(socket, IO::ByteFormat::NetworkEndian)
+      socket.flush
 
       user = password = ""
       AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
@@ -72,6 +75,7 @@ module AMQProxy
 
       tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: 0_u16, heartbeat: 600_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
+      socket.flush
 
       AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |tune_ok|
       end
@@ -84,6 +88,7 @@ module AMQProxy
 
       open_ok = AMQ::Protocol::Frame::Connection::OpenOk.new
       open_ok.to_io(socket, IO::ByteFormat::NetworkEndian)
+      socket.flush
 
       [vhost, user, password]
     end
