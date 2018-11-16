@@ -12,6 +12,7 @@ describe AMQProxy::Server do
         s.upstream_connections.should eq(1)
       end
     end
+    sleep 0.001
     s.client_connections.should eq(0)
     s.upstream_connections.should eq(1)
     s.close
@@ -24,14 +25,15 @@ describe AMQProxy::Server do
     sleep 0.001
     AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
       conn.channel
-      system "rabbitmqctl stop_app"
+      system "rabbitmqctl stop_app > /dev/null"
     end
-    system "rabbitmqctl start_app"
+    system "rabbitmqctl start_app > /dev/null"
     AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
       conn.channel
       s.client_connections.should eq(1)
       s.upstream_connections.should eq(1)
     end
+    sleep 0.001
     s.client_connections.should eq(0)
     s.upstream_connections.should eq(1)
     s.close
