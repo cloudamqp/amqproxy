@@ -10,7 +10,7 @@ targets:
 
 dependencies:
   amq-protocol:
-    path: ../amq-protocol.cr
+    github: cloudamqp/amq-protocol.cr
 
 development_dependencies:
   amqp:
