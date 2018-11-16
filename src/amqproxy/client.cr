@@ -16,7 +16,7 @@ module AMQProxy
 
     def decode_frames
       loop do
-        AMQ::Protocol::Frame.from_io @socket, IO::ByteFormat::NetworkEndian do |frame|
+        AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
           @outbox.send frame
         end
       end
@@ -40,8 +40,6 @@ module AMQProxy
     end
 
     private def negotiate_client(socket) : Array(String)
-      start = Bytes.new(8)
-
       proto = uninitialized UInt8[8]
       socket.read_fully(proto.to_slice)
 
@@ -51,12 +49,12 @@ module AMQProxy
         raise IO::EOFError.new("Invalid protocol start")
       end
 
-      start = AMQ::Protocol::Frame::Method::Connection::Start.new
+      start = AMQ::Protocol::Frame::Connection::Start.new
       start.to_io(socket, IO::ByteFormat::NetworkEndian)
 
       user = password = ""
       AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
-        start_ok = frame.as(AMQ::Protocol::Frame::Method::Connection::StartOk)
+        start_ok = frame.as(AMQ::Protocol::Frame::Connection::StartOk)
         case start_ok.mechanism
         when "PLAIN"
           resp = start_ok.response
@@ -72,7 +70,7 @@ module AMQProxy
         end
       end
 
-      tune = AMQ::Protocol::Frame::Method::Connection::Tune.new(frame_max: 131072_u32, channel_max: 0_u16, heartbeat: 600_u16)
+      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: 0_u16, heartbeat: 600_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
 
       AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |tune_ok|
@@ -80,11 +78,11 @@ module AMQProxy
 
       vhost = ""
       AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
-        open = frame.as(AMQ::Protocol::Frame::Method::Connection::Open)
+        open = frame.as(AMQ::Protocol::Frame::Connection::Open)
         vhost = open.vhost
       end
 
-      open_ok = AMQ::Protocol::Frame::Method::Connection::OpenOk.new
+      open_ok = AMQ::Protocol::Frame::Connection::OpenOk.new
       open_ok.to_io(socket, IO::ByteFormat::NetworkEndian)
 
       [vhost, user, password]

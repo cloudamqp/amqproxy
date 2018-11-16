@@ -36,9 +36,9 @@ module AMQProxy
       loop do
         AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
-          when AMQ::Protocol::Frame::Method::Channel::OpenOk
+          when AMQ::Protocol::Frame::Channel::OpenOk
             @open_channels.add(frame.channel)
-          when AMQ::Protocol::Frame::Method::Channel::CloseOk
+          when AMQ::Protocol::Frame::Channel::CloseOk
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
           end
@@ -60,25 +60,25 @@ module AMQProxy
     # Frames from client (to upstream)
     def write(frame : AMQ::Protocol::Frame)
       case frame
-      when AMQ::Protocol::Frame::Method::Basic::Get
+      when AMQ::Protocol::Frame::Basic::Get
         unless frame.no_ack
           @unsafe_channels.add(frame.channel)
         end
-      when AMQ::Protocol::Frame::Method::Basic
+      when AMQ::Protocol::Frame::Basic
         unless SAFE_BASIC_METHODS.includes? frame.method_id
           @unsafe_channels.add(frame.channel)
         end
-      when AMQ::Protocol::Frame::Method::Connection::Close
-        @to_client.send AMQ::Protocol::Frame::Method::Connection::CloseOk.new
+      when AMQ::Protocol::Frame::Connection::Close
+        @to_client.send AMQ::Protocol::Frame::Connection::CloseOk.new
         return
-      when AMQ::Protocol::Frame::Method::Channel::Open
+      when AMQ::Protocol::Frame::Channel::Open
         if @open_channels.includes? frame.channel
-          @to_client.send AMQ::Protocol::Frame::Method::Channel::OpenOk.new(frame.channel)
+          @to_client.send AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
           return
         end
-      when AMQ::Protocol::Frame::Method::Channel::Close
+      when AMQ::Protocol::Frame::Channel::Close
         unless @unsafe_channels.includes? frame.channel
-          @to_client.send AMQ::Protocol::Frame::Method::Channel::CloseOk.new(frame.channel)
+          @to_client.send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
           return
         end
       end
@@ -99,11 +99,11 @@ module AMQProxy
     def client_disconnected
       @open_channels.each do |ch|
         if @unsafe_channels.includes? ch
-          close = AMQ::Protocol::Frame::Method::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16)
+          close = AMQ::Protocol::Frame::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16)
           close.to_io @socket, IO::ByteFormat::NetworkEndian
           AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
             case frame
-            when AMQ::Protocol::Frame::Method::Channel::CloseOk
+            when AMQ::Protocol::Frame::Channel::CloseOk
               @open_channels.delete(ch)
               @unsafe_channels.delete(ch)
             else
@@ -118,7 +118,7 @@ module AMQProxy
     private def start(user, password, vhost)
       @socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
 
-      start = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Method::Connection::Start) }
+      start = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
 
       props = {
         "product" => "AMQProxy",
@@ -127,18 +127,18 @@ module AMQProxy
           "authentication_failure_close" => false
         } of String => AMQ::Protocol::Field
       } of String => AMQ::Protocol::Field
-      start_ok = AMQ::Protocol::Frame::Method::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
-                                                                       client_properties: props, mechanism: "PLAIN", locale: "en_US")
+      start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
+                                                               client_properties: props, mechanism: "PLAIN", locale: "en_US")
       start_ok.to_io @socket, IO::ByteFormat::NetworkEndian
 
-      tune = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Method::Connection::Tune) }
-      tune_ok = AMQ::Protocol::Frame::Method::Connection::TuneOk.new(tune.channel_max, tune.frame_max, 0_u16)
+      tune = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Tune) }
+      tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(tune.channel_max, tune.frame_max, 0_u16)
       tune_ok.to_io @socket, IO::ByteFormat::NetworkEndian
 
-      open = AMQ::Protocol::Frame::Method::Connection::Open.new(vhost: vhost)
+      open = AMQ::Protocol::Frame::Connection::Open.new(vhost: vhost)
       open.to_io @socket, IO::ByteFormat::NetworkEndian
 
-      open_ok = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Method::Connection::OpenOk) }
+      open_ok = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::OpenOk) }
     end
   end
 end

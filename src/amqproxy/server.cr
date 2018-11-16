@@ -81,11 +81,11 @@ module AMQProxy
 
     def handle_connection(socket, remote_address)
       @client_connections += 1
-      c = Client.new(socket)
       @log.info { "Client connection accepted from #{remote_address}" }
+      c = Client.new(socket)
       @pool.borrow(c.user, c.password, c.vhost) do |u|
         if u.nil?
-          f = AMQ::Protocol::Frame::Method::Connection::Close.new(403_u16, "ACCESS_REFUSED",
+          f = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "ACCESS_REFUSED",
                                                                    0_u16, 0_u16)
           f.to_io socket, IO::ByteFormat::NetworkEndian
           next
@@ -95,7 +95,7 @@ module AMQProxy
           case idx
           when 0 # Frame from upstream, to client
             if frame.nil?
-              f = AMQ::Protocol::Frame::Method::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
+              f = AMQ::Protocol::Frame::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
                                                   0_u16, 0_u16)
               f.to_io socket, IO::ByteFormat::NetworkEndian
               break
