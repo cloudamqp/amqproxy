@@ -66,7 +66,8 @@ module AMQProxy
           password = resp[(i + 1)..-1]
         when "AMQPLAIN"
           io = IO::Memory.new(start_ok.response)
-          tbl = AMQ::Protocol::Table.from_io(io, IO::ByteFormat::NetworkEndian)
+          tbl = AMQ::Protocol::Table.from_io(io, IO::ByteFormat::NetworkEndian,
+                                             start_ok.response.size.to_u32)
           user = tbl["LOGIN"].as(String)
           password = tbl["PASSWORD"].as(String)
         else "Unsupported authentication mechanism: #{start_ok.mechanism}"
