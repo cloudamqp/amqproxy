@@ -2,7 +2,7 @@ version: 1.0
 shards:
   amq-protocol:
     github: cloudamqp/amq-protocol.cr
-    commit: 48bde7c6943553127dfee970cbeccf3a834e0c18
+    version: 0.1.10
 
   amqp:
     github: cloudamqp/amqp.cr
