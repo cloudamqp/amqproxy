@@ -70,7 +70,7 @@ module AMQProxy
                                              start_ok.response.size.to_u32)
           user = tbl["LOGIN"].as(String)
           password = tbl["PASSWORD"].as(String)
-        else "Unsupported authentication mechanism: #{start_ok.mechanism}"
+        else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
         end
       end
 
