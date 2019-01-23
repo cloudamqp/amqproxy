@@ -74,7 +74,7 @@ module AMQProxy
         end
       end
 
-      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: 0_u16, heartbeat: 600_u16)
+      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: 0_u16, heartbeat: 0_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
