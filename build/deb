@@ -5,8 +5,6 @@ pkg_version=$(crystal eval 'require "./src/amqproxy/version"; puts AMQProxy::VER
 pkg_revision=$1
 root=amqproxy_$pkg_version-$pkg_revision
 
-shards build --release --production
-
 rm -rf $root
 mkdir -p $root/DEBIAN
 mkdir -p $root/usr/bin
@@ -42,7 +40,7 @@ Homepage: https://github.com/cloudamqp/amqproxy
 Section: net
 Priority: optional
 Architecture: $(dpkg --print-architecture)
-Depends: openssl (>= 1.0.1), systemd, libc6, adduser
+Depends: systemd, adduser
 Maintainer: CloudAMQP <support@cloudamqp.com>
 Description: proxy and connection pool for AMQP connections
  An intelligent AMQP proxy, with connection and channel pooling/reusing.
