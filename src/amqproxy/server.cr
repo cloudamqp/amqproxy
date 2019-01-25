@@ -86,31 +86,22 @@ module AMQProxy
       c = Client.new(socket)
       @pool.borrow(c.user, c.password, c.vhost) do |u|
         if u.nil?
-          f = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "ACCESS_REFUSED",
-                                                                   0_u16, 0_u16)
+          f = AMQ::Protocol::Frame::Connection::Close.new(403_u16,
+                                                          "ACCESS_REFUSED",
+                                                          0_u16, 0_u16)
           f.to_io socket, IO::ByteFormat::NetworkEndian
           next
         end
-        loop do
-          idx, frame = Channel.select([u.next_frame, c.next_frame])
-          case idx
-          when 0 # Frame from upstream, to client
-            if frame.nil?
-              f = AMQ::Protocol::Frame::Connection::Close.new(302_u16, "UPSTREAM_ERROR",
-                                                  0_u16, 0_u16)
-              f.to_io socket, IO::ByteFormat::NetworkEndian
-              socket.flush
-              next
-            end
-            frame.to_io socket, IO::ByteFormat::NetworkEndian
-            socket.flush
-          when 1 # Frame from client, to upstream
-            if frame.nil?
-              u.client_disconnected
-              break
-            end
-            u.write frame
-          end
+        upstream = u.not_nil!
+        spawn c.decode_frames(upstream)
+        spawn upstream.decode_frames(c)
+        idx, _ = Channel.select([
+          upstream.close_channel.receive_select_action,
+          c.close_channel.receive_select_action
+        ])
+        case idx
+        when 0 then c.upstream_disconnected
+        when 1 then upstream.client_disconnected
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error

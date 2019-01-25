@@ -3,41 +3,54 @@ require "amq-protocol"
 
 module AMQProxy
   class Client
-    getter vhost, user, password
+    getter vhost, user, password, close_channel
     @vhost : String
     @user : String
     @password : String
 
     def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
       @vhost, @user, @password = negotiate_client(@socket)
-      @outbox = Channel(AMQ::Protocol::Frame?).new(1)
-      spawn decode_frames
+      @close_channel = Channel(Nil).new
     end
 
-    def decode_frames
+    def decode_frames(upstream : Upstream)
       loop do
         AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
-          @outbox.send frame
+          case frame
+          when AMQ::Protocol::Frame::Heartbeat
+            frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
+            @socket.flush
+          else
+            if response_frame = upstream.write frame
+              response_frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
+              @socket.flush
+            end
+          end
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      @outbox.send nil
+      @close_channel.send nil
     end
 
-    def next_frame
-      @outbox.receive_select_action
-    end
-
-    def write(frame : AMQP::Frame)
+    def write(frame : AMQ::Protocol::Frame)
       frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
       @socket.flush
       case frame
-      when AMQP::Connection::CloseOk
+      when AMQ::Protocol::Frame::Connection::CloseOk
         @socket.close
-        @outbox.send nil
+        @close_channel.send nil
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      @outbox.send nil
+      @close_channel.send nil
+    end
+
+    def upstream_disconnected
+      f = AMQ::Protocol::Frame::Connection::Close.new(302_u16,
+                                                      "UPSTREAM_ERROR",
+                                                      0_u16, 0_u16)
+      f.to_io @socket, IO::ByteFormat::NetworkEndian
+      @socket.flush
+    rescue IO::Error
     end
 
     private def negotiate_client(socket) : Array(String)
