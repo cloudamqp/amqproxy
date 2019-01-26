@@ -43,6 +43,7 @@ module AMQProxy
             break
           end
         end
+        @log.info "Proxy stopping accepting connections"
       end
     end
 
@@ -93,8 +94,8 @@ module AMQProxy
           next
         end
         upstream = u.not_nil!
+        upstream.current_client = c
         spawn c.decode_frames(upstream)
-        spawn upstream.decode_frames(c)
         idx, _ = Channel.select([
           upstream.close_channel.receive_select_action,
           c.close_channel.receive_select_action

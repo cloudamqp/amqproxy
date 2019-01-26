@@ -1,10 +1,14 @@
 require "socket"
 require "openssl"
 require "uri"
+require "./client"
 
 module AMQProxy
   class Upstream
     getter close_channel
+    setter current_client
+
+    @current_client : Client?
 
     def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger)
       @socket = uninitialized IO
@@ -32,6 +36,7 @@ module AMQProxy
           tcp_socket
         end
       start(user, password, vhost)
+      spawn decode_frames
       self
     rescue ex : IO::EOFError
       @log.error "Failed connecting to upstream #{user}@#{@host}:#{@port}/#{vhost}"
@@ -39,7 +44,7 @@ module AMQProxy
     end
 
     # Frames from upstream (to client)
-    def decode_frames(client)
+    def decode_frames
       loop do
         AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
@@ -49,7 +54,7 @@ module AMQProxy
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
           end
-          client.write frame
+          @current_client.try &.write(frame)
         end
       end
     rescue ex : Errno | IO::EOFError
