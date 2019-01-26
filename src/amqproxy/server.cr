@@ -29,12 +29,6 @@ module AMQProxy
 
     def listen(address, port)
       TCPServer.open(address, port) do |socket|
-        socket.linger = 0
-        socket.keepalive = true
-        socket.tcp_nodelay = true
-        socket.tcp_keepalive_idle = 60
-        socket.tcp_keepalive_count = 3
-        socket.tcp_keepalive_interval = 10
         @log.info "Proxy listening on #{socket.local_address}"
         while @running
           if client = socket.accept?
@@ -49,12 +43,6 @@ module AMQProxy
 
     def listen_tls(address, port, cert_path : String, key_path : String)
       TCPServer.open(address, port) do |socket|
-        socket.linger = 0
-        socket.keepalive = true
-        socket.tcp_nodelay = true
-        socket.tcp_keepalive_idle = 60
-        socket.tcp_keepalive_count = 3
-        socket.tcp_keepalive_interval = 10
         context = OpenSSL::SSL::Context::Server.new
         context.private_key = key_path
         context.certificate_chain = cert_path
@@ -82,6 +70,12 @@ module AMQProxy
 
     def handle_connection(socket, remote_address)
       socket.sync = false
+      socket.linger = 0
+      socket.keepalive = true
+      socket.tcp_nodelay = true
+      socket.tcp_keepalive_idle = 60
+      socket.tcp_keepalive_count = 3
+      socket.tcp_keepalive_interval = 10
       @client_connections += 1
       @log.info { "Client connection accepted from #{remote_address}" }
       c = Client.new(socket)
