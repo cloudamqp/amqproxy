@@ -6,11 +6,12 @@ describe AMQProxy::Server do
     spawn { s.listen("127.0.0.1", 5673) }
     sleep 0.001
     10.times do
-      AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
         conn.channel
         s.client_connections.should eq(1)
         s.upstream_connections.should eq(1)
       end
+      puts "done"
     end
     sleep 0.001
     s.client_connections.should eq(0)
@@ -23,12 +24,12 @@ describe AMQProxy::Server do
     s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::ERROR)
     spawn { s.listen("127.0.0.1", 5673) }
     sleep 0.001
-    AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
+    AMQP::Client.start("amqp://localhost:5673") do |conn|
       conn.channel
       system "rabbitmqctl stop_app > /dev/null"
     end
     system "rabbitmqctl start_app > /dev/null"
-    AMQP::Connection.start(AMQP::Config.new(port: 5673)) do |conn|
+    AMQP::Client.start("amqp://localhost:5673") do |conn|
       conn.channel
       s.client_connections.should eq(1)
       s.upstream_connections.should eq(1)

@@ -14,8 +14,9 @@ dependencies:
     # path: ../amq-protocol.cr
 
 development_dependencies:
-  amqp:
-    github: cloudamqp/amqp.cr
+  amqp-client:
+    github: cloudamqp/amqp-client.cr
+    # path: ../amqp-client.cr
 
 crystal: 0.27.0
 
