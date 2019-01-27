@@ -11,7 +11,6 @@ describe AMQProxy::Server do
         s.client_connections.should eq(1)
         s.upstream_connections.should eq(1)
       end
-      puts "done"
     end
     sleep 0.001
     s.client_connections.should eq(0)
