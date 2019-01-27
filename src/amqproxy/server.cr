@@ -77,7 +77,7 @@ module AMQProxy
       socket.tcp_keepalive_count = 3
       socket.tcp_keepalive_interval = 10
       @client_connections += 1
-      @log.info { "Client connection accepted from #{remote_address}" }
+      @log.debug { "Client connection accepted from #{remote_address}" }
       c = Client.new(socket)
       @pool.borrow(c.user, c.password, c.vhost) do |u|
         if u.nil?
@@ -102,7 +102,7 @@ module AMQProxy
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
       @log.debug { "Client connection error from #{remote_address}: #{ex.inspect}" }
     ensure
-      @log.info { "Client connection closed from #{remote_address}" }
+      @log.debug { "Client connection closed from #{remote_address}" }
       socket.close
       @client_connections -= 1
     end
