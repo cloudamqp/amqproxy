@@ -28,44 +28,43 @@ module AMQProxy
     end
 
     def listen(address, port)
-      TCPServer.open(address, port) do |socket|
-        @log.info "Proxy listening on #{socket.local_address}"
-        while @running
-          if client = socket.accept?
-            spawn handle_connection(client, client.remote_address)
-          else
-            break
-          end
+      @socket = socket = TCPServer.new(address, port)
+      @log.info "Proxy listening on #{socket.local_address}"
+      while @running
+        if client = socket.accept?
+          spawn handle_connection(client, client.remote_address)
+        else
+          break
         end
-        @log.info "Proxy stopping accepting connections"
       end
+      @log.info "Proxy stopping accepting connections"
     end
 
     def listen_tls(address, port, cert_path : String, key_path : String)
-      TCPServer.open(address, port) do |socket|
-        context = OpenSSL::SSL::Context::Server.new
-        context.private_key = key_path
-        context.certificate_chain = cert_path
-        log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
-
-        while @running
-          if client = @socket.accept?
-            begin
-              ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
-              ssl_client.sync_close = true
-              spawn handle_connection(ssl_client, client.remote_address)
-            rescue e : OpenSSL::SSL::Error
-              @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"
-            end
-          else
-            break
+      @socket = socket = TCPServer.new(address, port)
+      context = OpenSSL::SSL::Context::Server.new
+      context.private_key = key_path
+      context.certificate_chain = cert_path
+      log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
+      while @running
+        if client = socket.accept?
+          begin
+            ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
+            ssl_client.sync_close = true
+            spawn handle_connection(ssl_client, client.remote_address)
+          rescue e : OpenSSL::SSL::Error
+            @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"
           end
+        else
+          break
         end
       end
+      @log.info "Proxy stopping accepting connections"
     end
 
     def close
       @running = false
+      @socket.try &.close
     end
 
     def handle_connection(socket, remote_address)

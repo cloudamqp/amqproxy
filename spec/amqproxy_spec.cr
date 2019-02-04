@@ -20,7 +20,6 @@ describe AMQProxy::Server do
 
   it "can reconnect if upstream closes" do
     sudo = ENV["TRAVIS"]? ? "sudo" : ""
-    system "while (nc localhost 5673 -w 1); do sleep 1; done"
     s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::ERROR)
     spawn { s.listen("127.0.0.1", 5673) }
     sleep 0.001
