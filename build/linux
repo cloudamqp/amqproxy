@@ -1,7 +1,8 @@
 #!/bin/bash -eux
 revision=$1
 vagrant up || vagrant reload
-vagrant ssh alpine -c "cd /vagrant; sudo shards build --release --production --static; sudo halt"
+vagrant ssh alpine -c "cd /vagrant; sudo shards build --release --production --static --lto=thin; sudo halt"
+vagrant halt alpine --force
 vagrant ssh ubuntu -c "cd /vagrant; build/tar $revision"
 vagrant ssh ubuntu -c "cd /vagrant; build/deb $revision"
 vagrant halt
