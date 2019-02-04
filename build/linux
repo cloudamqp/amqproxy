@@ -5,4 +5,4 @@ vagrant ssh alpine -c "cd /vagrant; sudo shards build --release --production --s
 vagrant halt alpine --force
 vagrant ssh ubuntu -c "cd /vagrant; build/tar $revision"
 vagrant ssh ubuntu -c "cd /vagrant; build/deb $revision"
-vagrant halt
+vagrant halt ubuntu
