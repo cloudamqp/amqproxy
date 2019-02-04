@@ -3,8 +3,8 @@ require "./amqproxy/server"
 require "option_parser"
 require "uri"
 
-listen_address = "::"
-listen_port = 5673
+listen_address = ENV["LISTEN_ADDRESS"]? || "::"
+listen_port = ENV["LISTEN_PORT"]? || 5673
 log_level = Logger::INFO
 p = OptionParser.parse! do |parser|
   parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
@@ -16,7 +16,7 @@ p = OptionParser.parse! do |parser|
   parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
 end
 
-upstream = ARGV.shift?
+upstream = ARGV.shift? || ENV["AMQP_URL"]?
 abort p.to_s if upstream.nil?
 
 u = URI.parse upstream
@@ -39,4 +39,4 @@ end
 Signal::INT.trap &shutdown
 Signal::TERM.trap &shutdown
 
-server.listen(listen_address, listen_port)
+server.listen(listen_address, listen_port.to_i)
