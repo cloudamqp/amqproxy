@@ -131,13 +131,13 @@ module AMQProxy
 
       start = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
 
-      props = {
+      props = AMQ::Protocol::Table.new({
         "product" => "AMQProxy",
         "version" => AMQProxy::VERSION,
         "capabilities" => {
           "authentication_failure_close" => false
         } of String => AMQ::Protocol::Field
-      } of String => AMQ::Protocol::Field
+      } of String => AMQ::Protocol::Field)
       start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
                                                                client_properties: props, mechanism: "PLAIN", locale: "en_US")
       start_ok.to_io @socket, IO::ByteFormat::NetworkEndian
