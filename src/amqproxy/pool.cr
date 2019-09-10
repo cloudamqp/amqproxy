@@ -14,18 +14,15 @@ module AMQProxy
       q = @pools[{ user, password, vhost }]
       u = q.shift do
         @size += 1
-        @log.info "Pool size #{@size}"
         Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
       end
       yield u
     ensure
       if u.nil?
         @size -= 1
-        @log.info "Pool size #{@size}"
         @log.error "Upstream connection could not be established"
       elsif u.closed?
         @size -= 1
-        @log.info "Pool size #{@size}"
         @log.error "Upstream connection closed when returned"
       else
         q.not_nil!.push u
@@ -53,7 +50,6 @@ module AMQProxy
             @log.error "Problem closing upstream: #{ex.inspect}"
           end
         end
-        @log.info "Pool size #{@size}"
       end
     end
   end

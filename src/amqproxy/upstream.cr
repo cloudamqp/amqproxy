@@ -23,7 +23,6 @@ module AMQProxy
       tcp_socket.tcp_keepalive_idle = 60
       tcp_socket.tcp_keepalive_count = 3
       tcp_socket.tcp_keepalive_interval = 10
-      @log.info { "Connected to upstream #{tcp_socket.remote_address}" }
       @socket =
         if @tls
           OpenSSL::SSL::Socket::Client.new(tcp_socket, hostname: @host).tap do |c|
