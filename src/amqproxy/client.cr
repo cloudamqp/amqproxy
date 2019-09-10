@@ -8,7 +8,7 @@ module AMQProxy
     @user : String
     @password : String
 
-    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
+    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server), @log : Logger)
       @vhost, @user, @password = negotiate_client(@socket)
       @close_channel = Channel(Nil).new
     end
@@ -20,6 +20,9 @@ module AMQProxy
           when AMQ::Protocol::Frame::Heartbeat
             frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
             @socket.flush
+          when AMQ::Protocol::Frame::Connection::CloseOk
+            @socket.close
+            break
           else
             if response_frame = upstream.write frame
               response_frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
@@ -29,7 +32,6 @@ module AMQProxy
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      puts "#{@socket.inspect} disconnected"
       @close_channel.send nil
     end
 
@@ -53,6 +55,14 @@ module AMQProxy
       f.to_io @socket, IO::ByteFormat::NetworkEndian
       @socket.flush
     rescue IO::Error
+    end
+
+    def close
+      f = AMQ::Protocol::Frame::Connection::Close.new(320_u16,
+                                                      "AMQProxy shutdown",
+                                                      0_u16, 0_u16)
+      f.to_io @socket, IO::ByteFormat::NetworkEndian
+      @socket.flush
     end
 
     private def negotiate_client(socket)

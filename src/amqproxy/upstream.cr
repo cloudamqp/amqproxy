@@ -55,8 +55,8 @@ module AMQProxy
           end
           if @current_client
             @current_client.not_nil!.write(frame)
-          else
-            @log.error "Got #{frame.inspect} but no client to delivery to"
+          elsif !frame.is_a? AMQ::Protocol::Frame::Channel::CloseOk
+            @log.error "Receiving #{frame.inspect} but no client to delivery to"
           end
         end
       end
