@@ -53,7 +53,7 @@ module AMQProxy
     rescue IO::Error
     end
 
-    private def negotiate_client(socket) : Array(String)
+    private def negotiate_client(socket)
       proto = uninitialized UInt8[8]
       socket.read_fully(proto.to_slice)
 
@@ -104,7 +104,7 @@ module AMQProxy
       open_ok.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      [vhost, user, password]
+      { vhost, user, password }
     end
   end
 end

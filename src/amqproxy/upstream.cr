@@ -53,14 +53,21 @@ module AMQProxy
           when AMQ::Protocol::Frame::Channel::CloseOk
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
+          when AMQ::Protocol::Frame::Connection::CloseOk
+            break
           end
-          @current_client.try &.write(frame)
+          if @current_client
+            @current_client.not_nil!.write(frame)
+          else
+            @log.error "Got #{frame.inspect} but no client to delivery to"
+          end
         end
       end
     rescue ex : Errno | IO::EOFError
-      @log.error "Error reading from upstream: #{ex.inspect}"
-      close
+      @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}"
+    ensure
       @close_channel.send nil
+      @socket.close
     end
 
     SAFE_BASIC_METHODS = [40, 10]
@@ -76,6 +83,8 @@ module AMQProxy
         unless SAFE_BASIC_METHODS.includes? frame.method_id
           @unsafe_channels.add(frame.channel)
         end
+      when AMQ::Protocol::Frame::Confirm
+        @unsafe_channels.add(frame.channel)
       when AMQ::Protocol::Frame::Connection::Close
         return AMQ::Protocol::Frame::Connection::CloseOk.new
       when AMQ::Protocol::Frame::Channel::Open
@@ -92,13 +101,15 @@ module AMQProxy
       nil
     rescue ex : Errno | IO::EOFError
       @log.error "Error sending to upstream: #{ex.inspect}"
-      close
+      @socket.close
       @close_channel.send nil
       nil
     end
 
-    def close
-      @socket.close
+    def close(reason = "")
+      close = AMQ::Protocol::Frame::Connection::Close.new(200_u16, reason, 0_u16, 0_u16)
+      close.to_io(@socket, IO::ByteFormat::NetworkEndian)
+      @socket.flush
     end
 
     def closed?
@@ -108,19 +119,9 @@ module AMQProxy
     def client_disconnected
       @open_channels.each do |ch|
         if @unsafe_channels.includes? ch
-          close = AMQ::Protocol::Frame::Channel::Close.new(ch, 200_u16, "", 0_u16, 0_u16)
+          close = AMQ::Protocol::Frame::Channel::Close.new(ch, 200_u16, "Client disconnected", 0_u16, 0_u16)
           close.to_io @socket, IO::ByteFormat::NetworkEndian
           @socket.flush
-          AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
-            case frame
-            when AMQ::Protocol::Frame::Channel::CloseOk
-              @open_channels.delete(ch)
-              @unsafe_channels.delete(ch)
-            else
-              @log.error "When closing channel, got #{frame.class}, closing"
-              @socket.close
-            end
-          end
         end
       end
     end
