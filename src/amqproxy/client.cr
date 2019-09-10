@@ -29,10 +29,12 @@ module AMQProxy
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+      puts "#{@socket.inspect} disconnected"
       @close_channel.send nil
     end
 
     def write(frame : AMQ::Protocol::Frame)
+      return if @socket.closed?
       frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
       @socket.flush
       case frame

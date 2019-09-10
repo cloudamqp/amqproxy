@@ -19,10 +19,7 @@ module AMQProxy
 
     def connect(user : String, password : String, vhost : String)
       tcp_socket = TCPSocket.new(@host, @port)
-      tcp_socket.sync = false
-      tcp_socket.linger = 0
       tcp_socket.keepalive = true
-      tcp_socket.tcp_nodelay = true
       tcp_socket.tcp_keepalive_idle = 60
       tcp_socket.tcp_keepalive_count = 3
       tcp_socket.tcp_keepalive_interval = 10
@@ -136,7 +133,13 @@ module AMQProxy
         "product" => "AMQProxy",
         "version" => AMQProxy::VERSION,
         "capabilities" => {
-          "authentication_failure_close" => false
+          "authentication_failure_close" => false,
+          "consumer_cancel_notify" => false,
+          "publisher_confirms" => true,
+          "exchange_exchange_bindings" => true,
+          "basic.nack" => true,
+          "per_consumer_qos" => true,
+          "connection.blocked" => true
         } of String => AMQ::Protocol::Field
       } of String => AMQ::Protocol::Field)
       start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
