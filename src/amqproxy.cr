@@ -3,7 +3,7 @@ require "./amqproxy/server"
 require "option_parser"
 require "uri"
 
-listen_address = ENV["LISTEN_ADDRESS"]? || "::"
+listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
 listen_port = ENV["LISTEN_PORT"]? || 5673
 log_level = Logger::INFO
 p = OptionParser.parse! do |parser|
