@@ -22,7 +22,7 @@ module AMQProxy
             @socket.flush
           when AMQ::Protocol::Frame::Connection::CloseOk
             @socket.close
-            break
+            return
           else
             if response_frame = upstream.write frame
               response_frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
@@ -32,6 +32,8 @@ module AMQProxy
         end
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+      nil
+    ensure
       @close_channel.send nil
     end
 

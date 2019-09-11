@@ -14,10 +14,11 @@ module AMQProxy
       @log = Logger.new(STDOUT)
       @log.level = log_level
       @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
-        io << message
+        io << "\r" << message
       end
       @clients = Array(Client).new
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log)
+      spawn shrink_pool_loop
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -71,7 +72,15 @@ module AMQProxy
       @clients.each &.close
     end
 
-    def handle_connection(socket, remote_address)
+    private def shrink_pool_loop
+      loop do
+        sleep 5
+        @pool.shrink 
+        print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
+      end
+    end
+
+    private def handle_connection(socket, remote_address)
       socket.keepalive = true
       socket.tcp_keepalive_idle = 60
       socket.tcp_keepalive_count = 3
@@ -80,31 +89,36 @@ module AMQProxy
       c = Client.new(socket, @log)
       active_client(c) do
         @pool.borrow(c.user, c.password, c.vhost) do |u|
-          # print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
-          if u.nil?
-            close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "ACCESS_REFUSED", 0_u16, 0_u16)
-            close.to_io socket, IO::ByteFormat::NetworkEndian
-          else
-            u.current_client = c
-            spawn c.decode_frames(u)
-            idx, _ = Channel.select([
-              u.close_channel.receive_select_action,
-              c.close_channel.receive_select_action
-            ])
-            case idx
-            when 0 then c.upstream_disconnected
-            when 1 then u.client_disconnected
-            end
-            u.current_client = nil
+          print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
+          u.current_client = c
+          spawn c.decode_frames(u)
+          idx, _ = Channel.select(
+            u.close_channel.receive_select_action,
+            c.close_channel.receive_select_action
+          )
+          case idx
+          when 0 then c.upstream_disconnected
+          when 1 then u.client_disconnected
           end
+          u.current_client = nil
         end
+      rescue ex : Upstream::AccessError
+        @log.error { "Access refused for user '#{c.user}' to vhost '#{c.vhost}', reason: #{ex.message}" }
+        close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "ACCESS_REFUSED - #{ex.message}", 0_u16, 0_u16)
+        close.to_io socket, IO::ByteFormat::NetworkEndian
+        socket.flush
+      rescue ex : Upstream::Error
+        @log.error { "Upstream error for user '#{c.user}' to vhost '#{c.vhost}': #{ex.inspect}" }
+        close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
+        close.to_io socket, IO::ByteFormat::NetworkEndian
+        socket.flush
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
       @log.debug { "Client disconnected: #{remote_address}: #{ex.inspect}" }
     ensure
       @log.debug { "Client disconnected: #{remote_address}" }
       socket.close
-      # print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
+      print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
     end
 
     private def active_client(client)

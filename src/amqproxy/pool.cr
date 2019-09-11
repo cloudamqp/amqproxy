@@ -7,10 +7,9 @@ module AMQProxy
         h[k] = Deque(Upstream).new
       end
       @size = 0
-      spawn shrink_loop
     end
 
-    def borrow(user : String, password : String, vhost : String, &block : (Upstream | Nil) -> _)
+    def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
       q = @pools[{ user, password, vhost }]
       u = q.shift do
         @size += 1
@@ -33,14 +32,7 @@ module AMQProxy
       shrink "AMQProxy shutdown"
     end
 
-    private def shrink_loop
-      loop do
-        sleep 60
-        shrink "Pooled connection closed due to inactivity"
-      end
-    end
-
-    private def shrink(reason)
+    def shrink(reason = "Pooled connection closed due to inactivity")
       @pools.each_value do |q|
         while u = q.shift?
           @size -= 1

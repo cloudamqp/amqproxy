@@ -34,9 +34,6 @@ module AMQProxy
       start(user, password, vhost)
       spawn decode_frames
       self
-    rescue ex : IO::EOFError
-      @log.error "Failed connecting to upstream #{user}@#{@host}:#{@port}/#{vhost}"
-      nil
     end
 
     # Frames from upstream (to client)
@@ -50,7 +47,7 @@ module AMQProxy
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
           when AMQ::Protocol::Frame::Connection::CloseOk
-            break
+            return
           end
           if @current_client
             @current_client.not_nil!.write(frame)
@@ -62,8 +59,8 @@ module AMQProxy
     rescue ex : Errno | IO::EOFError
       @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}"
     ensure
-      @close_channel.send nil
       @socket.close
+      @close_channel.send nil
     end
 
     SAFE_BASIC_METHODS = [40, 10]
@@ -132,7 +129,7 @@ module AMQProxy
         "product" => "AMQProxy",
         "version" => AMQProxy::VERSION,
         "capabilities" => {
-          "authentication_failure_close" => false,
+          "authentication_failure_close" => true,
           "consumer_cancel_notify" => false,
           "publisher_confirms" => true,
           "exchange_exchange_bindings" => true,
@@ -155,7 +152,26 @@ module AMQProxy
       open.to_io @socket, IO::ByteFormat::NetworkEndian
       @socket.flush
 
-      open_ok = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::OpenOk) }
+      open_ok = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |f|
+        case f
+        when AMQ::Protocol::Frame::Connection::Close
+          close_ok = AMQ::Protocol::Frame::Connection::CloseOk.new
+          close_ok.to_io @socket, IO::ByteFormat::NetworkEndian
+          @socket.flush
+          @socket.close
+          raise AccessError.new f.reply_text
+        when AMQ::Protocol::Frame::Connection::OpenOk
+          true
+        end
+      end
+    rescue ex : AccessError
+      raise ex
+    rescue ex
+      @socket.close
+      raise Error.new ex.message, cause: ex
     end
+
+    class Error < Exception; end
+    class AccessError < Error; end
   end
 end
