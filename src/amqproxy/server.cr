@@ -21,6 +21,14 @@ module AMQProxy
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
+    def client_connections
+      @clients.size
+    end
+
+    def upstream_connections
+      @pool.size
+    end
+
     def listen(address, port)
       @socket = socket = TCPServer.new(address, port)
       @log.info "Proxy listening on #{socket.local_address}"
