@@ -2,44 +2,37 @@ require "socket"
 require "amq-protocol"
 
 module AMQProxy
-  class Client
-    getter vhost, user, password, close_channel
-
-    @vhost : String
-    @user : String
-    @password : String
-
-    def_equals_and_hash @socket
-
-    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server), @log : Logger)
-      @vhost, @user, @password = negotiate_client(@socket)
-      @close_channel = Channel(Nil).new
+  struct Client
+    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
     end
 
-    def decode_frames(upstream : Upstream)
+    def read_loop(upstream : Upstream)
       loop do
         AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
           when AMQ::Protocol::Frame::Heartbeat
-            frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
+            @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
             @socket.flush
           when AMQ::Protocol::Frame::Connection::CloseOk
-            @socket.close
             return
           else
             if response_frame = upstream.write frame
-              response_frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
+              @socket.write_bytes response_frame, IO::ByteFormat::NetworkEndian
               @socket.flush
+              return if response_frame.is_a? AMQ::Protocol::Frame::Connection::CloseOk
             end
           end
         end
       end
-    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      nil
-    ensure
-      @close_channel.send nil
+    rescue ex : Upstream::WriteError
+      upstream_disconnected
+    rescue ex : IO::EOFError
+      raise Error.new "Client disconnected", ex
+    rescue ex
+      raise ReadError.new "Client read error", ex
     end
 
+    # Send frame to client
     def write(frame : AMQ::Protocol::Frame)
       return if @socket.closed?
       frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
@@ -47,30 +40,25 @@ module AMQProxy
       case frame
       when AMQ::Protocol::Frame::Connection::CloseOk
         @socket.close
-        @close_channel.send nil
       end
     rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
-      @close_channel.send nil
+      raise WriteError.new "Error writing to client", ex
     end
 
     def upstream_disconnected
-      f = AMQ::Protocol::Frame::Connection::Close.new(302_u16,
-                                                      "UPSTREAM_ERROR",
-                                                      0_u16, 0_u16)
-      f.to_io @socket, IO::ByteFormat::NetworkEndian
-      @socket.flush
-    rescue IO::Error
+      write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
+                                                        "UPSTREAM_ERROR",
+                                                        0_u16, 0_u16)
+    rescue WriteError
     end
 
     def close
-      f = AMQ::Protocol::Frame::Connection::Close.new(320_u16,
-                                                      "AMQProxy shutdown",
-                                                      0_u16, 0_u16)
-      f.to_io @socket, IO::ByteFormat::NetworkEndian
-      @socket.flush
+      write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
+                                                        "AMQProxy shutdown",
+                                                        0_u16, 0_u16)
     end
 
-    private def negotiate_client(socket)
+    def self.negotiate(socket)
       proto = uninitialized UInt8[8]
       socket.read_fully(proto.to_slice)
 
@@ -122,6 +110,13 @@ module AMQProxy
       socket.flush
 
       { vhost, user, password }
+    rescue ex
+      raise NegotiationError.new "Client negotiation failed", ex
     end
+
+    class Error < Exception; end
+    class ReadError < Error; end
+    class WriteError < Error; end
+    class NegotiationError < Error; end
   end
 end

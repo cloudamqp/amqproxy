@@ -5,14 +5,12 @@ require "./client"
 
 module AMQProxy
   class Upstream
-    getter close_channel
     setter current_client
 
     @current_client : Client?
 
     def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger)
       @socket = uninitialized IO
-      @close_channel = Channel(Nil).new
       @open_channels = Set(UInt16).new
       @unsafe_channels = Set(UInt16).new
     end
@@ -32,12 +30,14 @@ module AMQProxy
           tcp_socket
         end
       start(user, password, vhost)
-      spawn decode_frames
+      spawn read_loop
       self
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+      raise Error.new "Cannot establish connection to upstream", ex
     end
 
     # Frames from upstream (to client)
-    def decode_frames
+    def read_loop
       loop do
         AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
@@ -46,30 +46,38 @@ module AMQProxy
           when AMQ::Protocol::Frame::Channel::CloseOk
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
-          when AMQ::Protocol::Frame::Connection::Close
-            @log.error "Upstream closed connection: #{frame.reply_text}"
-            write AMQ::Protocol::Frame::Connection::CloseOk.new
-            return
           when AMQ::Protocol::Frame::Connection::CloseOk
             return
           end
           if @current_client
-            @current_client.not_nil!.write(frame)
+            begin
+              @current_client.not_nil!.write(frame)
+            rescue ex
+              @log.error "#{frame.inspect} could not be sent to client: #{ex.inspect}"
+            end
           elsif !frame.is_a? AMQ::Protocol::Frame::Channel::CloseOk
             @log.error "Receiving #{frame.inspect} but no client to delivery to"
           end
+          if frame.is_a? AMQ::Protocol::Frame::Connection::Close
+            @log.error "Upstream closed connection: #{frame.reply_text}"
+            begin
+              write AMQ::Protocol::Frame::Connection::CloseOk.new
+            rescue ex : WriteError
+              @log.error "Error writing CloseOk to upstream: #{ex.inspect}"
+            end
+            return
+          end
         end
       end
-    rescue ex : Errno | IO::EOFError
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
       @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}"
     ensure
       @socket.close
-      @close_channel.send nil
     end
 
-    SAFE_BASIC_METHODS = [40, 10]
+    SAFE_BASIC_METHODS = { 40, 10 }
 
-    # Frames from client (to upstream)
+    # Send frames to upstream (often from the client)
     def write(frame : AMQ::Protocol::Frame)
       case frame
       when AMQ::Protocol::Frame::Basic::Get
@@ -93,20 +101,21 @@ module AMQProxy
           return AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
         end
       end
-      frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
+      @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
       @socket.flush
       nil
-    rescue ex : Errno | IO::EOFError
-      @log.error "Error sending to upstream: #{ex.inspect}"
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
       @socket.close
-      @close_channel.send nil
-      nil
+      raise WriteError.new "Error writing to upstream", ex
     end
 
     def close(reason = "")
       close = AMQ::Protocol::Frame::Connection::Close.new(200_u16, reason, 0_u16, 0_u16)
       close.to_io(@socket, IO::ByteFormat::NetworkEndian)
       @socket.flush
+    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+      @socket.close
+      raise WriteError.new "Error writing Connection#Close to upstream", ex
     end
 
     def closed?
@@ -114,6 +123,7 @@ module AMQProxy
     end
 
     def client_disconnected
+      return if closed?
       @open_channels.each do |ch|
         if @unsafe_channels.includes? ch
           close = AMQ::Protocol::Frame::Channel::Close.new(ch, 200_u16, "Client disconnected", 0_u16, 0_u16)
@@ -177,5 +187,6 @@ module AMQProxy
 
     class Error < Exception; end
     class AccessError < Error; end
+    class WriteError < Error; end
   end
 end

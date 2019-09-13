@@ -76,7 +76,7 @@ module AMQProxy
       loop do
         sleep 5
         @pool.shrink 
-        print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
+        print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
       end
     end
 
@@ -86,39 +86,34 @@ module AMQProxy
       socket.tcp_keepalive_count = 3
       socket.tcp_keepalive_interval = 10
       @log.debug { "Client connected: #{remote_address}" }
-      c = Client.new(socket, @log)
+      vhost, user, password = Client.negotiate(socket)
+      c = Client.new(socket)
       active_client(c) do
-        @pool.borrow(c.user, c.password, c.vhost) do |u|
-          print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
+        @pool.borrow(user, password, vhost) do |u|
+          print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
           u.current_client = c
-          spawn c.decode_frames(u)
-          idx, _ = Channel.select(
-            u.close_channel.receive_select_action,
-            c.close_channel.receive_select_action
-          )
-          case idx
-          when 0 then c.upstream_disconnected
-          when 1 then u.client_disconnected
-          end
+          c.read_loop(u)
+        ensure
           u.current_client = nil
+          u.client_disconnected
         end
       rescue ex : Upstream::AccessError
-        @log.error { "Access refused for user '#{c.user}' to vhost '#{c.vhost}', reason: #{ex.message}" }
+        @log.error { "Access refused for user '#{user}' to vhost '#{vhost}', reason: #{ex.message}" }
         close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "ACCESS_REFUSED - #{ex.message}", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
       rescue ex : Upstream::Error
-        @log.error { "Upstream error for user '#{c.user}' to vhost '#{c.vhost}': #{ex.inspect}" }
+        @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect}" }
         close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
       end
-    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+    rescue ex : Client::Error
       @log.debug { "Client disconnected: #{remote_address}: #{ex.inspect}" }
     ensure
       @log.debug { "Client disconnected: #{remote_address}" }
       socket.close
-      print "\rClients: #{@clients.size} Upstreams: #{@pool.size}"
+      print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
     end
 
     private def active_client(client)
