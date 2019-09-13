@@ -46,6 +46,10 @@ module AMQProxy
           when AMQ::Protocol::Frame::Channel::CloseOk
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
+          when AMQ::Protocol::Frame::Connection::Close
+            @log.error "Upstream closed connection: #{frame.reply_text}"
+            write AMQ::Protocol::Frame::Connection::CloseOk.new
+            return
           when AMQ::Protocol::Frame::Connection::CloseOk
             return
           end
