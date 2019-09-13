@@ -4,9 +4,12 @@ require "amq-protocol"
 module AMQProxy
   class Client
     getter vhost, user, password, close_channel
+
     @vhost : String
     @user : String
     @password : String
+
+    def_equals_and_hash @socket
 
     def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server), @log : Logger)
       @vhost, @user, @password = negotiate_client(@socket)
