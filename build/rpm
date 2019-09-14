@@ -1,0 +1,69 @@
+#!/bin/bash
+set -eux
+pkg_version=$(shards version)
+pkg_revision=${1:-1}
+root=~/rpmbuild
+
+mkdir -p $root/{RPMS,SRPMS,SOURCES,SPECS,tmp}
+
+git archive --format=tar.gz -o $root/SOURCES/amqproxy.tar.gz --prefix=amqproxy-$pkg_version/ master
+
+cat > $root/SPECS/amqproxy.spec << EOF
+Name:    amqproxy
+Version: $pkg_version
+Release: $pkg_revision%{?dist}
+Summary: Connection and channel pool for AMQP connections
+
+License: ASL 2.0
+%{?systemd_requires}
+BuildRequires: systemd crystal help2man zlib-devel openssl-devel
+Requires(pre): shadow-utils
+URL: https://github.com/cloudamqp/amqproxy
+#Source0: https://github.com/cloudamqp/%{name}/archive/v%{version}.tar.gz
+Source0: %{name}.tar.gz
+
+%description
+An AMQP proxy that reuses upstream connections and channels
+
+%prep
+%setup -q
+
+%check
+#crystal spec
+
+%build
+shards build --production --release
+
+%install
+install -D -m 0755 bin/%{name} %{buildroot}/%{_bindir}/%{name}
+install -D -m 0644 extras/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
+mkdir -p %{buildroot}/%{_mandir}/man1
+help2man -Nn "AMQP proxy that reuses upstream connections and channels" bin/%{name} > %{buildroot}/%{_mandir}/man1/%{name}.1
+mkdir -p %{buildroot}/%{_sharedstatedir}/%{name}
+
+%post
+%systemd_post %{name}.service
+
+%preun
+%systemd_preun %{name}.service
+
+%postun
+%systemd_postun_with_restart %{name}.service
+
+%files
+%doc README.md
+%license LICENSE
+%{_bindir}/%{name}
+%{_unitdir}/%{name}.service
+%{_mandir}/man1/*
+
+%changelog
+* Wed Jul 03 2019 CloudAMQP Team <contact@cloudamqp.com>
+- Initial version of the package
+EOF
+
+rpmlint $root/SPECS/amqproxy.spec
+rpmbuild -bb $root/SPECS/amqproxy.spec
+rm -rf builds/rpm
+mv $root/RPMS builds/rpm
+#rpmlint $root/RPMS/amqproxy-$pkg_version*
