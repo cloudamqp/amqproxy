@@ -17,6 +17,7 @@ module AMQProxy
 
     def connect(user : String, password : String, vhost : String)
       tcp_socket = TCPSocket.new(@host, @port)
+      tcp_socket.sync = false
       tcp_socket.keepalive = true
       tcp_socket.tcp_keepalive_idle = 60
       tcp_socket.tcp_keepalive_count = 3
