@@ -6,7 +6,7 @@ require "uri"
 listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
 listen_port = ENV["LISTEN_PORT"]? || 5673
 log_level = Logger::INFO
-p = OptionParser.parse! do |parser|
+p = OptionParser.parse do |parser|
   parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
   parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is all)") { |p| listen_address = p }
   parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |p| listen_port = p.to_i }
