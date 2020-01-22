@@ -1,34 +1,13 @@
-require "amqp"
+require "amqp-client"
 
-abort "Usage: #{PROGRAM_NAME} <ip:port> <msgs>" if ARGV.size != 2
+abort "Usage: #{PROGRAM_NAME} <amqp-url> <msg-count>" if ARGV.size != 2
 url, msgs = ARGV
-host, port = url.split(":")
-puts "Publishing #{msgs} msgs"
-conf = AMQP::Config.new(host, port.to_i)
-AMQP::Connection.start(conf) do |conn|
-  conn.on_close do |code, msg|
-    puts "CONNECTION CLOSED: #{code} - #{msg}"
-  end
-
-  channel = conn.channel
-  channel.on_close do |code, msg|
-    puts "CHANNEL CLOSED: #{code} - #{msg}"
-  end
-
-  exchange = channel.topic("amq.topic", durable: true)
-  queue = channel.queue("test")
-  #queue.bind(exchange, "r.*")
-  #queue.subscribe do |msg|
-  #  puts "Received msg (1): #{msg.key} #{String.new(msg.body)}"
-  #  msg.ack
-  #end
-  #queue.subscribe do |msg|
-  #  puts "Received msg (2): #{msg.properties}"
-  #  msg.ack
-  #end
-
-  msgs.to_i.times do |idx|
-    msg = AMQP::Message.new("test message: #{idx+1}")
-    exchange.publish(msg, "r.k")
+puts "Publishing #{msgs} msgs on one connection"
+AMQP::Client.start(url) do |c|
+  c.channel do |ch|
+    q = ch.queue("test")
+    msgs.to_i.times do |idx|
+      q.publish "msg #{idx}"
+    end
   end
 end
