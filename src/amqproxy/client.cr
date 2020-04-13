@@ -41,7 +41,7 @@ module AMQProxy
       when AMQ::Protocol::Frame::Connection::CloseOk
         @socket.close
       end
-    rescue ex : Errno | IO::Error | OpenSSL::SSL::Error
+    rescue ex : Socket::Error | OpenSSL::SSL::Error
       raise WriteError.new "Error writing to client", ex
     end
 
