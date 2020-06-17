@@ -71,7 +71,7 @@ module AMQProxy
           end
         end
       end
-    rescue ex : Socket::Error | OpenSSL::SSL::Error
+    rescue ex : IO::Error | Socket::Error | OpenSSL::SSL::Error
       @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}"
     ensure
       @socket.close
