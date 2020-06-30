@@ -2,6 +2,7 @@ FROM crystallang/crystal:latest-alpine as build
 WORKDIR /app
 COPY . .
 RUN shards build --release --production --static
+RUN strip bin/*
 
 FROM alpine:latest
 
