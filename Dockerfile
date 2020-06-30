@@ -1,7 +1,12 @@
-FROM crystallang/crystal
+FROM crystallang/crystal:latest-alpine as build
 WORKDIR /app
 COPY . .
-RUN shards build --release --production
+RUN shards build --release --production --static
+
+FROM alpine:latest
+
+WORKDIR /app
+COPY --from=build /app/bin /app/bin
 
 ENV LISTEN_ADDRESS=0.0.0.0
 ENV LISTEN_PORT=5673
