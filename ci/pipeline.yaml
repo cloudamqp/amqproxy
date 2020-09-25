@@ -32,7 +32,7 @@ resources:
   - name: git-amqproxy
     type: git
     source:
-      uri: git@github.com:cloudamqp/amqproxy.git
+      uri: git@github.com:teamleader/amqproxy.git
       branch: master
       private_key: ((TEAMLEADER_PRIVATE_KEY))
     icon: github
@@ -102,6 +102,7 @@ jobs:
       - do:
           - get: docker-teamleader-amqproxy
           - get: git-amqproxy
+            trigger: true
           - put: docker-teamleader-amqproxy
             params:
               build: git-amqproxy
