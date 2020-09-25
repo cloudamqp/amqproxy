@@ -1,0 +1,13 @@
+---
+platform: linux
+
+inputs:
+  - name: git-ci-docker-amqproxy
+
+run:
+  path: sh
+  args:
+    - -exec
+    - |
+      cd git-ci-docker-amqproxy/ci
+      yamllint . -d .yamllint

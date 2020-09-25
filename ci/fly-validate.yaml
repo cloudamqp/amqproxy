@@ -1,0 +1,13 @@
+---
+platform: linux
+
+inputs:
+  - name: git-ci-docker-amqproxy
+
+run:
+  path: sh
+  args:
+    - -exec
+    - |
+      cd git-ci-docker-amqproxy
+      fly validate-pipeline -s -c ci/pipeline.yaml -l ci/params.yaml -l ci/common-vars.yaml

@@ -1,0 +1,32 @@
+---
+SLACK_ON_FAILURE:
+  put: slack-alert
+  params:
+    attachments:
+      - color: danger
+        text: |
+          [$BUILD_PIPELINE_NAME] - [$BUILD_JOB_NAME] Failed. Check it out at: https://ci.teamleader.eu/builds/$BUILD_ID
+
+SLACK_ON_SUCCESS:
+  put: slack-alert
+  params:
+    attachments:
+      - color: good
+        text: |
+          [$BUILD_PIPELINE_NAME] - [$BUILD_JOB_NAME] Successful. Check it out at: https://ci.teamleader.eu/builds/$BUILD_ID
+
+SLACK_ON_SUCCESS_DEPLOYMENT:
+  put: slack-alert
+  params:
+    attachments:
+      - color: good
+        text: |
+          [$BUILD_PIPELINE_NAME] - [$BUILD_JOB_NAME] Successful deployment (<https://ci.teamleader.eu/builds/$BUILD_ID|$BUILD_ID>).
+
+SLACK_ON_FAILURE_DEPLOYMENT:
+  put: slack-alert
+  params:
+    attachments:
+      - color: danger
+        text: |
+          [$BUILD_PIPELINE_NAME] - [$BUILD_JOB_NAME] Failed deployment (<https://ci.teamleader.eu/builds/$BUILD_ID|$BUILD_ID>).

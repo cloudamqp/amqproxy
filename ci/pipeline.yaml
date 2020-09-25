@@ -1,0 +1,229 @@
+---
+resource_types:
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+      tag: latest
+  - name: helm
+    type: docker-image
+    source:
+      repository: linkyard/concourse-helm-resource
+      tag: 2.14.1-1
+  - name: pull-request
+    type: docker-image
+    source:
+      repository: teliaoss/github-pr-resource
+  - name: github-webhook-resource
+    type: docker-image
+    source:
+      repository: homedepottech/github-webhook-resource
+      tag: latest
+
+resources:
+  - name: git-ci-docker-amqproxy
+    type: git
+    source:
+      paths: [ci]
+      uri: git@github.com:teamleadercrm/amqproxy.git
+      branch: master
+      private_key: ((TEAMLEADER_PRIVATE_KEY))
+    icon: github
+  - name: git-amqproxy
+    type: git
+    source:
+      uri: git@github.com:cloudamqp/amqproxy.git
+      branch: master
+      private_key: ((TEAMLEADER_PRIVATE_KEY))
+    icon: github
+  - name: git-ci-pull-request
+    check_every: 6h
+    webhook_token: ((TEAMLEADER_WEBHOOK_TOKEN))
+    type: pull-request
+    source:
+      access_token: ((GITHUB_ACCESS_TOKEN))
+      repository: teamleadercrm/amqproxy
+      paths: ['ci/*']
+    icon: github
+  # Other resources
+  - name: slack-alert
+    type: slack-notification
+    source:
+      # slack channel: dev-team-marketplace
+      url: https://hooks.slack.com/services/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
+    icon: slack
+  - name: docker-fly-validate
+    type: docker-image
+    source:
+      repository: teamleader/concourse-fly
+      tag: 6.2
+      username: ((DOCKER_HUB_USERNAME))
+      password: ((DOCKER_HUB_PASSWORD))
+  - name: docker-yamllint
+    type: docker-image
+    source:
+      repository: teamleader/yamllint
+      tag: latest
+      username: ((DOCKER_HUB_USERNAME))
+      password: ((DOCKER_HUB_PASSWORD))
+  - name: docker-teamleader-amqproxy
+    type: docker-image
+    check_every: 24h
+    source:
+      repository: teamleader/amqproxy
+      username: ((DOCKER_HUB_USERNAME))
+      password: ((DOCKER_HUB_PASSWORD))
+    icon: docker
+
+  - name: github-webhook
+    type: github-webhook-resource
+    check_every: 24h
+    source:
+      github_api: https://api.github.com
+      github_token: ((GITHUB_ACCESS_TOKEN))
+
+groups:
+  - name: amqproxy
+    jobs:
+      - build-amqproxy
+  - name: amqproxy-ops
+    jobs:
+      - pr-yamllint
+      - pr-fly-validate
+      - pr-yamllint
+      - yamllint
+      - fly-validate
+      - set-pipeline
+      - create-repository-ci-webhook
+
+jobs:
+  - name: build-amqproxy
+    plan:
+      - do:
+          - get: docker-teamleader-amqproxy
+          - get: git-amqproxy
+          - put: docker-teamleader-amqproxy
+            params:
+              build: git-amqproxy
+              tag_file: git-amqproxy/.git/HEAD
+              tag_as_latest: true
+
+  # OPS jobs
+
+  - name: pr-yamllint
+    plan:
+      - in_parallel:
+          - get: git-ci-pull-request
+            trigger: true
+            version: every
+          - get: docker-yamllint
+            params: {save: true}
+      - put: git-ci-pull-request
+        params:
+          path: git-ci-pull-request
+          status: pending
+          context: yamllint
+      - task: yamllint
+        image: docker-yamllint
+        file: git-ci-pull-request/ci/yamllint.yaml
+        input_mapping:
+          git-ci-docker-amqproxy: git-ci-pull-request
+    on_success:
+      put: git-ci-pull-request
+      params:
+        path: git-ci-pull-request
+        status: success
+        context: yamllint
+    on_failure:
+      put: git-ci-pull-request
+      params:
+        path: git-ci-pull-request
+        status: failure
+        context: yamllint
+
+  - name: pr-fly-validate
+    plan:
+      - in_parallel:
+          - get: git-ci-pull-request
+            trigger: true
+            version: every
+          - get: docker-fly-validate
+            params: {save: true}
+      - put: git-ci-pull-request
+        params:
+          path: git-ci-pull-request
+          status: pending
+          context: fly-validate
+      - task: fly-validate
+        image: docker-fly-validate
+        file: git-ci-pull-request/ci/fly-validate.yaml
+        input_mapping:
+          git-ci-docker-amqproxy: git-ci-pull-request
+    on_success:
+      put: git-ci-pull-request
+      params:
+        path: git-ci-pull-request
+        status: success
+        context: fly-validate
+    on_failure:
+      put: git-ci-pull-request
+      params:
+        path: git-ci-pull-request
+        status: failure
+        context: fly-validate
+
+  - name: fly-validate
+    plan:
+      - in_parallel:
+          - get: docker-fly-validate
+            params: {save: true}
+          - get: git-ci-docker-amqproxy
+            trigger: true
+      - task: fly-validate
+        image: docker-fly-validate
+        file: git-ci-docker-amqproxy/ci/fly-validate.yaml
+
+  - name: yamllint
+    plan:
+      - in_parallel:
+          - get: docker-yamllint
+            params: {save: true}
+          - get: git-ci-docker-amqproxy
+            trigger: true
+      - task: yamllint
+        image: docker-yamllint
+        file: git-ci-docker-amqproxy/ci/yamllint.yaml
+
+  - name: set-pipeline
+    plan:
+      - get: git-ci-docker-amqproxy
+        trigger: true
+        passed: [fly-validate, yamllint]
+      - set_pipeline: docker-amqproxy
+        file: git-ci-docker-amqproxy/ci/pipeline.yaml
+        var_files:
+          - git-ci-docker-amqproxy/ci/common-vars.yaml
+          - git-ci-docker-amqproxy/ci/params.yaml
+    on_failure: ((SLACK_ON_FAILURE))
+
+  - name: create-repository-ci-webhook
+    plan:
+      - in_parallel:
+          - put: create-pr-webhook
+            resource: github-webhook
+            params:
+              org: teamleadercrm
+              repo: amqproxy
+              resource_name: git-pull-request
+              webhook_token: ((TEAMLEADER_WEBHOOK_TOKEN))
+              operation: create
+              events: [push, pull_request]
+          - put: create-ci-pr-webhook
+            resource: github-webhook
+            params:
+              org: teamleadercrm
+              repo: amqproxy
+              resource_name: git-ci-pull-request
+              webhook_token: ((TEAMLEADER_WEBHOOK_TOKEN))
+              operation: create
+              events: [push, pull_request]
