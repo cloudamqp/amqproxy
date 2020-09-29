@@ -15,15 +15,12 @@ jobs:
       - name: Install Dependencies
         run: shards install --production
       - name: Build
-        run:  |
-          build/tar 1
-          tar=$(ls -1 *.tar.gz)
-          echo "::set-env name=TAR::$tar"
+        run:  build/tar 1
       - name: Upload github artifact
         uses: actions/upload-artifact@v2
         with:
-          path: ${{ env.TAR }}
-          name: ${{ env.TAR }}
+          path: *.tar.gz
+          name: tar
 
   deb:
     name: Deb
@@ -53,3 +50,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           path: builds/debian/**
+          name: deb
