@@ -11,3 +11,4 @@ cp bin/amqproxy amqproxy/
 cp LICENSE README.md amqproxy/
 tar zcvf amqproxy-$pkg_version-$pkg_revision.$pkg_platform-static.tar.gz amqproxy/*
 rm -r amqproxy
+echo amqproxy-$pkg_version-$pkg_revision.$pkg_platform-static.tar.gz
