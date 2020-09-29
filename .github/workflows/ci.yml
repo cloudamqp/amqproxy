@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Install rabbitmq
-        run: apt-get install -y rabbitmq-server
+        run: apt-get update && apt-get install -y rabbitmq-server
 
       - name: Checkout
         uses: actions/checkout@v2
