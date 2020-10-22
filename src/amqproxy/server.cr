@@ -13,7 +13,7 @@ module AMQProxy
     def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO)
       @log = Logger.new(STDOUT)
       @log.level = log_level
-      if(@log.level == Logger::DEBUG)
+      if @log.level == Logger::DEBUG
         @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
           io << "\r" << datetime << " : " << message
         end
