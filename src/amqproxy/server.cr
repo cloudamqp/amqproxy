@@ -15,7 +15,7 @@ module AMQProxy
       @log.level = log_level
       if @log.level == Logger::DEBUG
         @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
-          io << "\r" << datetime << " : " << message
+          io << "\n" << datetime << " : " << message
         end
       else
         @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
