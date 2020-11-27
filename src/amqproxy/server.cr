@@ -82,7 +82,7 @@ module AMQProxy
       loop do
         sleep 5
         @pool.shrink 
-        print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
+        # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
       end
     end
 
@@ -98,7 +98,7 @@ module AMQProxy
       c = Client.new(socket)
       active_client(c) do
         @pool.borrow(user, password, vhost) do |u|
-          print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
+          # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
           u.current_client = c
           c.read_loop(u)
         ensure
@@ -121,7 +121,7 @@ module AMQProxy
     ensure
       @log.debug { "Client disconnected: #{remote_address}" }
       socket.close
-      print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
+      # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
     end
 
     private def active_client(client)
