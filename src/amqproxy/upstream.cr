@@ -92,6 +92,8 @@ module AMQProxy
         end
       when AMQ::Protocol::Frame::Confirm
         @unsafe_channels.add(frame.channel)
+      when AMQ::Protocol::Frame::Tx
+        @unsafe_channels.add(frame.channel)
       when AMQ::Protocol::Frame::Connection::Close
         return AMQ::Protocol::Frame::Connection::CloseOk.new
       when AMQ::Protocol::Frame::Channel::Open
