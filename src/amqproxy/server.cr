@@ -13,14 +13,18 @@ module AMQProxy
     def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO)
       @log = Logger.new(STDOUT)
       @log.level = log_level
-      if @log.level == Logger::DEBUG
-        @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
-          io << "\r" << datetime << " : " << message
-        end
-      else
-        @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
-          io << "\r" << message
-        end
+      journald =
+        {% if flag?(:unix) %}
+          if journal_stream = ENV.fetch("JOURNAL_STREAM", nil)
+            stdout_stat = STDOUT.info.@stat
+            journal_stream == "#{stdout_stat.st_dev}:#{stdout_stat.st_ino}"
+          end
+        {% else %}
+          false
+        {% end %}
+      @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
+        io << datetime << ": " unless journald
+        io << message
       end
       @clients = Array(Client).new
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log)
@@ -54,7 +58,7 @@ module AMQProxy
       context = OpenSSL::SSL::Context::Server.new
       context.private_key = key_path
       context.certificate_chain = cert_path
-      log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
+      @log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
       while @running
         if client = socket.accept?
           begin
