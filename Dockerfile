@@ -6,9 +6,7 @@ COPY src/ src/
 RUN shards build --release --production --static
 RUN strip bin/*
 
-FROM alpine:latest
-COPY --from=build /tmp/bin/ /usr/bin/
-
-USER nobody:nogroup
+FROM scratch
+COPY --from=build /tmp/bin/amqproxy /amqproxy
 EXPOSE 5673
-ENTRYPOINT ["/usr/bin/amqproxy"]
+ENTRYPOINT ["/amqproxy"]
