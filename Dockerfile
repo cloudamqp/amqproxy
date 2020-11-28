@@ -1,15 +1,14 @@
-FROM crystallang/crystal:latest-alpine as build
-WORKDIR /app
-COPY . .
+FROM crystallang/crystal:0.35.1-alpine as build
+WORKDIR /tmp
+COPY shard.yml shard.lock .
+RUN shards install --production
+COPY src/ src/
 RUN shards build --release --production --static
 RUN strip bin/*
 
 FROM alpine:latest
+COPY --from=build /tmp/bin /usr/bin
 
-WORKDIR /app
-COPY --from=build /app/bin /app/bin
-
-ENV LISTEN_ADDRESS=0.0.0.0
-ENV LISTEN_PORT=5673
-ENV AMQP_URL=amqp://127.0.0.1:5672
-CMD bin/amqproxy -l $LISTEN_ADDRESS -p $LISTEN_PORT $AMQP_URL
+USER nobody:nogroup
+EXPOSE 5673
+ENTRYPOINT ["/usr/bin/amqproxy"]
