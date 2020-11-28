@@ -7,6 +7,7 @@ RUN shards build --release --production --static
 RUN strip bin/*
 
 FROM scratch
+USER 2:2
 COPY --from=build /tmp/bin/amqproxy /amqproxy
 EXPOSE 5673
 ENTRYPOINT ["/amqproxy"]
