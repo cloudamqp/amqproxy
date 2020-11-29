@@ -46,11 +46,9 @@ Then from your AMQP client connect to localhost:5673, it will resuse connections
 
 ## Docker instructions
 
-To run AMQP proxy within a container, build the docker image using the Dockerfile.
+To run AMQP proxy within a container, [pull the image from Docker Hub](https://hub.docker.com/r/cloudamqp/amqproxy):
 
-Pull from [Docker Hub](https://hub.docker.com/r/cloudamqp/amqproxy):
-
-`docker pull amqproxy:latest`
+`docker pull cloudamqp/amqproxy:latest`
 
 Or build from the `Dockerfile`:
 
@@ -58,4 +56,4 @@ Or build from the `Dockerfile`:
 
 Run:
 
-`docker run --rm -p 5673:5673 amqproxy amqp://SERVER`
+`docker run -it -p 5673:5673 amqproxy amqp://SERVER`
