@@ -8,7 +8,7 @@ listen_port = ENV["LISTEN_PORT"]? || 5673
 log_level = Logger::INFO
 p = OptionParser.parse do |parser|
   parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
-  parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is all)") { |p| listen_address = p }
+  parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") { |p| listen_address = p }
   parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |p| listen_port = p.to_i }
   parser.on("-d", "--debug", "Verbose logging") { |d| log_level = Logger::DEBUG }
   parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
