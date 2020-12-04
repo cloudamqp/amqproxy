@@ -1,4 +1,4 @@
-FROM crystallang/crystal:0.35.1-alpine as build
+FROM crystallang/crystal:0.35.1-alpine as builder
 WORKDIR /tmp
 COPY shard.yml shard.lock ./
 RUN shards install --production
@@ -8,6 +8,6 @@ RUN strip bin/*
 
 FROM scratch
 USER 2:2
-COPY --from=build /tmp/bin/amqproxy /amqproxy
+COPY --from=builder /tmp/bin/amqproxy /amqproxy
 EXPOSE 5673
-ENTRYPOINT ["/amqproxy"]
+ENTRYPOINT ["/amqproxy", "--listen=0.0.0.0"]
