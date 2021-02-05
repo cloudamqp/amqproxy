@@ -11,13 +11,13 @@ targets:
 dependencies:
   amq-protocol:
     github: cloudamqp/amq-protocol.cr
-    # path: ../amq-protocol.cr
+  logger:
+    github: crystal-lang/logger.cr
 
 development_dependencies:
   amqp-client:
     github: cloudamqp/amqp-client.cr
-    # path: ../amqp-client.cr
 
-crystal: 0.35.1
+crystal: 0.36.1
 
 license: MIT
