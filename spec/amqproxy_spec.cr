@@ -43,4 +43,22 @@ describe AMQProxy::Server do
       s.close
     end
   end
+
+  it "responds to upstream heartbeats" do
+    system("sudo rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 1).' > /dev/null").should be_true
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    begin
+      spawn { s.listen("127.0.0.1", 5673) }
+      Fiber.yield
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        conn.channel
+      end
+      sleep 2
+      s.client_connections.should eq(0)
+      s.upstream_connections.should eq(1)
+    ensure
+      s.close
+      system("sudo rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 60).' > /dev/null").should be_true
+    end
+  end
 end
