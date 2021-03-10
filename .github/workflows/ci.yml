@@ -5,7 +5,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    container: crystallang/crystal:0.35.1
+    container: crystallang/crystal:0.36.1
 
     steps:
       - name: Checkout
@@ -18,12 +18,17 @@ jobs:
 
   spec:
     name: Spec
-    runs-on: ubuntu-latest
-    container: crystallang/crystal:0.35.1
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Install rabbitmq
-        run: apt-get update && apt-get install -y rabbitmq-server
+        run: sudo apt-get update && sudo apt-get install -y rabbitmq-server
+
+      - name: Install Crystal
+        run: |
+          wget https://crystal-lang.org/install.sh
+          chmod +x install.sh
+          sudo ./install.sh --crystal=0.36.1
 
       - name: Checkout
         uses: actions/checkout@v2
