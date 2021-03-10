@@ -34,7 +34,7 @@ module AMQProxy
       start(user, password, vhost)
       spawn read_loop
       self
-    rescue ex : Socket::Error | OpenSSL::SSL::Error
+    rescue ex : IO::Error | OpenSSL::SSL::Error
       raise Error.new "Cannot establish connection to upstream", ex
     end
 
@@ -75,10 +75,10 @@ module AMQProxy
           end
         end
       end
-    rescue ex : IO::Error | Socket::Error | OpenSSL::SSL::Error
-      @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}"
+    rescue ex : IO::Error | OpenSSL::SSL::Error
+      @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}" unless @socket.closed?
     ensure
-      @socket.close
+      @socket.close unless @socket.closed?
     end
 
     SAFE_BASIC_METHODS = { 40, 10 }
@@ -112,7 +112,7 @@ module AMQProxy
       @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
       @socket.flush
       nil
-    rescue ex : Socket::Error | OpenSSL::SSL::Error
+    rescue ex : IO::Error | OpenSSL::SSL::Error
       @socket.close
       raise WriteError.new "Error writing to upstream", ex
     end
@@ -121,7 +121,7 @@ module AMQProxy
       close = AMQ::Protocol::Frame::Connection::Close.new(200_u16, reason, 0_u16, 0_u16)
       close.to_io(@socket, IO::ByteFormat::NetworkEndian)
       @socket.flush
-    rescue ex : Socket::Error | OpenSSL::SSL::Error
+    rescue ex : IO::Error | OpenSSL::SSL::Error
       @socket.close
       raise WriteError.new "Error writing Connection#Close to upstream", ex
     end
