@@ -51,3 +51,24 @@ jobs:
         with:
           path: builds/debian/**
           name: deb
+
+      - uses: actions/setup-ruby@v1
+        with:
+          ruby-version: '2.7'
+
+      - name: Install packagecloud cli
+        run: gem install package_cloud
+
+      - name: Get Ubuntu release name
+        run: echo "CODENAME=$(lsb_release -cs)" >> $GITHUB_ENV
+
+      - name: Get version
+        run: echo "VERSION=$(shards version)" >> $GITHUB_ENV
+
+      - name: Get arch
+        run: echo "ARCH=$(dpkg --print-architecture)" >> $GITHUB_ENV
+
+      - name: Upload to packagecloud release repo
+        run: package_cloud push cloudamqp/amqproxy/ubuntu/${{ env.CODENAME }} builds/debian/${{ env.CODENAME }}/amqproxy_${{ env.VERSION }}-1_${{ env.ARCH }}.deb
+        env:
+          PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
