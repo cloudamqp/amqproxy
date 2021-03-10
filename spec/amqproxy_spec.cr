@@ -22,16 +22,15 @@ describe AMQProxy::Server do
   end
 
   it "can reconnect if upstream closes" do
-    sudo = ENV["TRAVIS"]? ? "sudo" : ""
     s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
       AMQP::Client.start("amqp://localhost:5673") do |conn|
         conn.channel
-        system "#{sudo} rabbitmqctl stop_app > /dev/null"
+        system("sudo rabbitmqctl stop_app > /dev/null").should be_true
       end
-      system "#{sudo} rabbitmqctl start_app > /dev/null"
+      system("sudo rabbitmqctl start_app > /dev/null").should be_true
       AMQP::Client.start("amqp://localhost:5673") do |conn|
         conn.channel
         s.client_connections.should eq(1)
