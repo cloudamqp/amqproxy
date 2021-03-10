@@ -1,3 +1,3 @@
 module AMQProxy
-  VERSION = "0.5.0"
+  VERSION = {{ `shards version`.stringify }}
 end
