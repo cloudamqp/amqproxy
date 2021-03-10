@@ -10,6 +10,27 @@ Only "safe" channels are reused, that is channels where only Basic Publish or Ba
 
 In our benchmarks publishing one message per connection to a server (using TLS) with a round-trip latency of 50ms, takes on avarage 0.01s using the proxy and 0.50s without. You can read more about the proxy here [Maintaining long-lived connections with AMQProxy](https://www.cloudamqp.com/blog/2019-05-29-maintaining-long-lived-connections-with-AMQProxy.html)
 
+
+## Installation
+
+Debian/Ubuntu:
+
+```sh
+wget -qO- https://packagecloud.io/cloudamqp/amqproxy/gpgkey | sudo apt-key add -
+echo "deb https://packagecloud.io/cloudamqp/amqproxy/ubuntu/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/amqproxy.list
+
+sudo apt update
+sudo apt install amqproxy
+```
+
+Docker/Podman:
+
+Docker images are published at [Docker Hub](https://hub.docker.com/repository/docker/cloudamqp/amqproxy). Fetch and run the latest version with:
+
+`docker run --rm -it -p 5673:5673 cloudamqp/amqproxy amqp://SERVER:5672`
+
+Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
+
 ## Installation (from source)
 
 [Install Crystal](https://crystal-lang.org/docs/installation/)
@@ -23,37 +44,3 @@ systemctl start amqproxy
 ```
 
 You probably want to modify `/etc/systemd/system/amqproxy.service` and configure another upstream host.
-
-## Installation (from binary package)
-
-Download deb-package or any of the tar.gz packages with compiled binaries from the [Releases page](https://github.com/cloudamqp/amqproxy/releases).
-
-Requirements OS X:
-
-`brew install crystal openssl`
-
-Requirements Linux: OpenSSL
-
-## Usage
-
-`bin/amqproxy -l LISTEN_ADDRESS -p LISTEN_PORT AMQP_URL`
-
-As an example:
-
-`bin/amqproxy -l 127.0.0.1 -p 5673 amqps://myserver.rmq.cloudamqp.com`
-
-Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
-
-## Docker instructions
-
-To run AMQP proxy within a container, [pull the image from Docker Hub](https://hub.docker.com/r/cloudamqp/amqproxy):
-
-`docker pull cloudamqp/amqproxy:latest`
-
-Or build from the `Dockerfile`:
-
-`docker build -t amqproxy .`
-
-Run:
-
-`docker run -it -p 5673:5673 amqproxy amqp://SERVER`
