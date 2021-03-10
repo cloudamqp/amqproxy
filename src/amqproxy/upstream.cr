@@ -40,8 +40,9 @@ module AMQProxy
 
     # Frames from upstream (to client)
     def read_loop
+      socket = @socket
       loop do
-        AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
+        AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
           when AMQ::Protocol::Frame::Channel::OpenOk
             @open_channels.add(frame.channel)
@@ -50,10 +51,13 @@ module AMQProxy
             @unsafe_channels.delete(frame.channel)
           when AMQ::Protocol::Frame::Connection::CloseOk
             return
+          when AMQ::Protocol::Frame::Heartbeat
+            write frame
+            next
           end
-          if @current_client
+          if client = @current_client
             begin
-              @current_client.not_nil!.write(frame)
+              client.write(frame)
             rescue ex
               @log.error "#{frame.inspect} could not be sent to client: #{ex.inspect}"
             end
@@ -162,7 +166,7 @@ module AMQProxy
       @socket.flush
 
       tune = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Tune) }
-      tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(tune.channel_max, tune.frame_max, 0_u16)
+      tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(tune.channel_max, tune.frame_max, tune.heartbeat)
       tune_ok.to_io @socket, IO::ByteFormat::NetworkEndian
       @socket.flush
 
