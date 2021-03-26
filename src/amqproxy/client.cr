@@ -3,22 +3,25 @@ require "amq-protocol"
 
 module AMQProxy
   struct Client
+    @closed = false
+
     def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
     end
 
     def read_loop(upstream : Upstream)
+      socket = @socket
       loop do
-        AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |frame|
+        AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
           when AMQ::Protocol::Frame::Heartbeat
-            @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
-            @socket.flush
+            socket.write_bytes frame, IO::ByteFormat::NetworkEndian
+            socket.flush
           when AMQ::Protocol::Frame::Connection::CloseOk
             return
           else
             if response_frame = upstream.write frame
-              @socket.write_bytes response_frame, IO::ByteFormat::NetworkEndian
-              @socket.flush
+              socket.write_bytes response_frame, IO::ByteFormat::NetworkEndian
+              socket.flush
               return if response_frame.is_a? AMQ::Protocol::Frame::Connection::CloseOk
             end
           end
@@ -27,19 +30,24 @@ module AMQProxy
     rescue ex : Upstream::WriteError
       upstream_disconnected
     rescue ex : IO::EOFError
-      raise Error.new "Client disconnected", ex
+      raise Error.new("Client disconnected", ex) unless @closed
     rescue ex
       raise ReadError.new "Client read error", ex
+    ensure
+      @closed = true
+      @socket.close rescue nil
     end
 
     # Send frame to client
     def write(frame : AMQ::Protocol::Frame)
-      return if @socket.closed?
-      frame.to_io(@socket, IO::ByteFormat::NetworkEndian)
-      @socket.flush
+      socket = @socket
+      return if socket.closed?
+      frame.to_io(socket, IO::ByteFormat::NetworkEndian)
+      socket.flush
       case frame
       when AMQ::Protocol::Frame::Connection::CloseOk
-        @socket.close
+        @closed = true
+        socket.close
       end
     rescue ex : Socket::Error | OpenSSL::SSL::Error
       raise WriteError.new "Error writing to client", ex
