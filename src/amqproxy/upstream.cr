@@ -63,6 +63,9 @@ module AMQProxy
             end
           elsif !frame.is_a? AMQ::Protocol::Frame::Channel::CloseOk
             @log.error "Receiving #{frame.inspect} but no client to delivery to"
+            if body = frame.as? AMQ::Protocol::Frame::Body
+              body.body.skip(body.body_size)
+            end
           end
           if frame.is_a? AMQ::Protocol::Frame::Connection::Close
             @log.error "Upstream closed connection: #{frame.reply_text}"
