@@ -28,7 +28,7 @@ module AMQProxy
       end
       @clients = Array(Client).new
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log)
-      spawn shrink_pool_loop
+      spawn shrink_pool_loop, name: "shrink pool loop"
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -45,7 +45,7 @@ module AMQProxy
       @log.info "Proxy listening on #{socket.local_address}"
       while @running
         if client = socket.accept?
-          spawn handle_connection(client, client.remote_address)
+          spawn handle_connection(client, client.remote_address), name: "handle connection #{client.remote_address}"
         else
           break
         end
@@ -64,7 +64,7 @@ module AMQProxy
           begin
             ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
             ssl_client.sync_close = true
-            spawn handle_connection(ssl_client, client.remote_address)
+            spawn handle_connection(ssl_client, client.remote_address), name: "handle connection #{client.remote_address} (tls)"
           rescue e : OpenSSL::SSL::Error
             @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"
           end
