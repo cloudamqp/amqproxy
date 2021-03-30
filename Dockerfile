@@ -4,7 +4,7 @@ COPY shard.yml shard.lock ./
 RUN shards install --production
 COPY src/ src/
 RUN shards build --release --production --static
-RUN strip bin/*
+#RUN strip bin/*
 
 FROM scratch
 USER 2:2
