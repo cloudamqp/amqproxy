@@ -45,7 +45,8 @@ module AMQProxy
       @log.info "Proxy listening on #{socket.local_address}"
       while @running
         if client = socket.accept?
-          spawn handle_connection(client, client.remote_address), name: "handle connection #{client.remote_address}"
+          addr = client.remote_address
+          spawn handle_connection(client, addr), name: "handle connection #{addr}"
         else
           break
         end
@@ -62,9 +63,10 @@ module AMQProxy
       while @running
         if client = socket.accept?
           begin
+            addr = client.remote_address
             ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
             ssl_client.sync_close = true
-            spawn handle_connection(ssl_client, client.remote_address), name: "handle connection #{client.remote_address} (tls)"
+            spawn handle_connection(ssl_client, addr), name: "handle connection #{addr} (tls)"
           rescue e : OpenSSL::SSL::Error
             @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"
           end
