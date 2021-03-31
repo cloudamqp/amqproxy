@@ -28,7 +28,6 @@ module AMQProxy
       end
       @clients = Array(Client).new
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log)
-      spawn shrink_pool_loop, name: "shrink pool loop"
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -82,14 +81,6 @@ module AMQProxy
       @socket.try &.close
       @pool.try &.close
       @clients.each &.close
-    end
-
-    private def shrink_pool_loop
-      loop do
-        sleep 5
-        @pool.shrink 
-        # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
-      end
     end
 
     private def handle_connection(socket, remote_address)

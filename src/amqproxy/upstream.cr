@@ -5,9 +5,8 @@ require "./client"
 
 module AMQProxy
   class Upstream
-    setter current_client
-
-    @current_client : Client?
+    property last_used = Time.monotonic
+    setter current_client : Client?
 
     def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger)
       @socket = uninitialized IO
