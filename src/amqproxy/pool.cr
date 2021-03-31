@@ -12,9 +12,9 @@ module AMQProxy
     end
 
     def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
-      @lock.synchronize do
+      u = @lock.synchronize do
         q = @pools[{ user, password, vhost }]
-        u = q.shift do
+        q.shift do
           @size += 1
           Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
         end
