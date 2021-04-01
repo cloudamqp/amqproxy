@@ -59,6 +59,14 @@ module AMQProxy
               client.write(frame)
             rescue ex
               @log.error "#{frame.inspect} could not be sent to client: #{ex.inspect}"
+              @current_client = nil # don't try to write to this client again
+              client.close_socket # close the socket of the client so that the client's read_loop exits
+              # If a body frame was written you can't be sure how far it got
+              # The only safe thing is to close the upstream connection
+              if frame.is_a? AMQ::Protocol::Frame::Body
+                close("Proxy client disconnected while writing to it")
+                next
+              end
             end
           elsif !frame.is_a? AMQ::Protocol::Frame::Channel::CloseOk
             @log.error "Receiving #{frame.inspect} but no client to delivery to"

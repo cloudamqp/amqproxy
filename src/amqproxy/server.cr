@@ -117,7 +117,7 @@ module AMQProxy
       @log.debug { "Client disconnected: #{remote_address}: #{ex.inspect}" }
     ensure
       @log.debug { "Client disconnected: #{remote_address}" }
-      socket.close
+      socket.close rescue nil
       # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
     end
 

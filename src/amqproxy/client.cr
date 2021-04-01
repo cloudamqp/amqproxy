@@ -66,6 +66,11 @@ module AMQProxy
                                                         0_u16, 0_u16)
     end
 
+    def close_socket
+      @closed = true
+      @socket.close rescue nil
+    end
+
     def self.negotiate(socket)
       proto = uninitialized UInt8[8]
       socket.read_fully(proto.to_slice)
