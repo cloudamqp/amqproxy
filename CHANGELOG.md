@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2021-04-07
+
+### Changed
+
+- Wait at least 5s before closing an upstream connection
+
+### Fixed
+
+- Close client socket on write error
+- Close Upstreadm socket if client disconnects while deliverying body as state is then unknown
+
 ## [0.5.3] - 2021-03-30
 
 ### Fixed
