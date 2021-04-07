@@ -79,8 +79,8 @@ module AMQProxy
     def close
       @running = false
       @socket.try &.close
-      @pool.try &.close
       @clients.each &.close
+      @pool.try &.close
     end
 
     private def handle_connection(socket, remote_address)
