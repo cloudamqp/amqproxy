@@ -2,7 +2,7 @@ module AMQProxy
   class Pool
     getter :size
 
-    def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger)
+    def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger, @idle_connection_timeout : Int32)
       @pools = Hash(Tuple(String, String, String), Deque(Upstream)).new do |h, k|
         h[k] = Deque(Upstream).new
       end
@@ -54,18 +54,19 @@ module AMQProxy
       loop do
         sleep 5.seconds
         @lock.synchronize do
+          max_connection_age = Time.monotonic - @idle_connection_timeout.seconds
           @pools.each_value do |q|
             q.size.times do
               u = q.shift
-              if u.last_used > Time.monotonic - 30.seconds
+              if u.last_used < max_connection_age
+                @size -= 1
+                begin
+                  u.close "Pooled connection closed due to inactivity"
+                rescue ex
+                  @log.error "Problem closing upstream: #{ex.inspect}"
+                end
+              else
                 q.push u
-                next
-              end
-              @size -= 1
-              begin
-                u.close "Pooled connection closed due to inactivity"
-              rescue ex
-                @log.error "Problem closing upstream: #{ex.inspect}"
               end
             end
           end

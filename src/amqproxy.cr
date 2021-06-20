@@ -6,10 +6,14 @@ require "uri"
 listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
 listen_port = ENV["LISTEN_PORT"]? || 5673
 log_level = Logger::INFO
+idle_connection_timeout = 5
 p = OptionParser.parse do |parser|
   parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
   parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") { |p| listen_address = p }
   parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |p| listen_port = p.to_i }
+  parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |p|
+    idle_connection_timeout = p.to_i
+  end
   parser.on("-d", "--debug", "Verbose logging") { |d| log_level = Logger::DEBUG }
   parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
   parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
@@ -30,7 +34,7 @@ default_port =
 port = u.port || default_port
 tls = u.scheme == "amqps"
 
-server = AMQProxy::Server.new(u.host || "", port, tls, log_level)
+server = AMQProxy::Server.new(u.host || "", port, tls, log_level, idle_connection_timeout)
 
 shutdown = -> (s : Signal) do
   server.close

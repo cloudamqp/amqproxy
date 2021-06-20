@@ -10,7 +10,7 @@ module AMQProxy
   class Server
     @running = true
 
-    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO)
+    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5)
       @log = Logger.new(STDOUT)
       @log.level = log_level
       journald =
@@ -27,7 +27,7 @@ module AMQProxy
         io << message
       end
       @clients = Array(Client).new
-      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log)
+      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout)
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
