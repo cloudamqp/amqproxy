@@ -57,7 +57,7 @@ module AMQProxy
           @pools.each_value do |q|
             q.size.times do
               u = q.shift
-              if u.last_used > Time.monotonic - 5.seconds
+              if u.last_used > Time.monotonic - 30.seconds
                 q.push u
                 next
               end
