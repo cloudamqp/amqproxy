@@ -11,5 +11,4 @@ USER 2:2
 COPY --from=builder /etc/ssl/cert.pem /etc/ssl/
 COPY --from=builder /tmp/bin/amqproxy /amqproxy
 EXPOSE 5673
-ENV IDLE_CONNECTION_TIMEOUT=5
-ENTRYPOINT ["/amqproxy", "--listen=0.0.0.0", "--idle-connection-timeout=$IDLE_CONNECTION_TIMEOUT"]
+ENTRYPOINT ["/amqproxy", "--listen=0.0.0.0"]
