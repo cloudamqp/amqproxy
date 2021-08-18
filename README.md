@@ -33,7 +33,7 @@ Then from your AMQP client connect to localhost:5673, it will resuse connections
 
 ## Installation (from source)
 
-[Install Crystal](https://crystal-lang.org/docs/installation/)
+[Install Crystal](https://crystal-lang.org/install/)
 
 ```
 shards build --release --production
