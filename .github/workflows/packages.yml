@@ -31,6 +31,8 @@ jobs:
     container:
       image: ${{ matrix.image }}
     steps:
+      - run: apt-get update
+
       - name: Install dependencies
         run: apt-get install -y libsystemd-dev dpkg fakeroot help2man lintian build-essential gcc pkg-config git tzdata libpcre3-dev libevent-dev libyaml-dev libgmp-dev libssl-dev libxml2-dev
 
