@@ -28,6 +28,7 @@ jobs:
     strategy:
       matrix:
         image: ['ubuntu:focal', 'ubuntu:bionic', 'debian:buster']
+      fail-fast: false
     container:
       image: ${{ matrix.image }}
     steps:
