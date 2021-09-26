@@ -34,7 +34,7 @@ jobs:
       - run: apt-get update
 
       - name: Install dependencies
-        run: env DEBIAN_FRONTEND=noninteractive apt-get install -y wget libsystemd-dev dpkg fakeroot help2man lintian build-essential gcc pkg-config git tzdata libpcre3-dev libevent-dev libyaml-dev libgmp-dev libssl-dev libxml2-dev
+        run: env DEBIAN_FRONTEND=noninteractive apt-get install -y wget libsystemd-dev dpkg fakeroot help2man lintian build-essential gcc pkg-config git tzdata libpcre3-dev libevent-dev libyaml-dev libgmp-dev libssl-dev libxml2-dev ruby
 
       - name: Install Crystal
         run: |
@@ -59,23 +59,19 @@ jobs:
           path: builds/debian/**
           name: deb
 
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '2.7'
-
       - name: Install packagecloud cli
         run: gem install package_cloud
 
       - name: Get Ubuntu release name
-        run: echo "CODENAME=$(lsb_release -cs)" >> $GITHUB_ENV
+        run: cat /etc/os-release >> $GITHUB_ENV
 
       - name: Get version
-        run: echo "VERSION=$(shards version)" >> $GITHUB_ENV
+        run: echo "SHARDS_VERSION=$(shards version)" >> $GITHUB_ENV
 
       - name: Get arch
         run: echo "ARCH=$(dpkg --print-architecture)" >> $GITHUB_ENV
 
       - name: Upload to packagecloud release repo
-        run: package_cloud push cloudamqp/amqproxy/ubuntu/${{ env.CODENAME }} builds/debian/${{ env.CODENAME }}/amqproxy_${{ env.VERSION }}-1_${{ env.ARCH }}.deb
+        run: package_cloud push cloudamqp/amqproxy/ubuntu/${{ env.VERSION_CODENAME }} builds/debian/${{ env.VERSION_CODENAME }}/amqproxy_${{ env.SHARDS_VERSION }}-1_${{ env.ARCH }}.deb
         env:
           PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
