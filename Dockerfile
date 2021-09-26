@@ -1,4 +1,6 @@
-FROM crystallang/crystal:1.0.0-alpine as builder
+FROM alpine:latest AS builder
+RUN apk add crystal shards musl-dev openssl-dev openssl-libs-static zlib-dev zlib-static
+
 WORKDIR /tmp
 COPY shard.yml shard.lock ./
 RUN shards install --production
