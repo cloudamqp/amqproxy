@@ -61,4 +61,4 @@ jobs:
           debfile=$(find builds -name '*.deb' | tail -1)
           curl -i -XPOST https://packagecloud.io/api/v1/repos/cloudamqp/amqproxy/packages.json \
             -F "package[distro_version_id]=${dist_id}" \
-            -F "package[package_file]=@${debfile}" | jq .
+            -F "package[package_file]=@${debfile}"
