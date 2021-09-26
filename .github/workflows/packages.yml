@@ -60,7 +60,7 @@ jobs:
           curl -nfO https://packagecloud.io/api/v1/distributions.json
           dist_id=$(jq ".deb[] | select(.index_name == \"${ID}\").versions[] | select(.index_name == \"${VERSION_CODENAME}\").id" distributions.json)
           debfile=$(find builds -name '*.deb' | tail -1)
-          curl -nfX POST https://packagecloud.io/api/v1/repos/test_user/test_repo/packages.json \
+          curl -nfX POST https://packagecloud.io/api/v1/repos/cloudamqp/amqproxy/packages.json \
             -F "package[distro_version_id]=${dist_id}" \
             -F "package[package_file]=@${debfile}"
 
