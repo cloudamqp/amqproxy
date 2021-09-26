@@ -54,8 +54,6 @@ jobs:
         run: |
           cat > ~/.curlrc << EOF
           user ${{ secrets.PACKAGECLOUD_TOKEN }}:
-          no-progress-meter
-          fail
           EOF
           . /etc/os-release
           curl -O https://packagecloud.io/api/v1/distributions.json
