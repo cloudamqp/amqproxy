@@ -25,7 +25,7 @@ sudo apt install amqproxy
 
 Docker/Podman:
 
-Docker images are published at [Docker Hub](https://hub.docker.com/repository/docker/cloudamqp/amqproxy). Fetch and run the latest version with:
+Docker images are published at [Docker Hub](https://hub.docker.com/r/cloudamqp/amqproxy). Fetch and run the latest version with:
 
 `docker run --rm -it -p 5673:5673 cloudamqp/amqproxy amqp://SERVER:5672`
 
