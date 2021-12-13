@@ -19,7 +19,6 @@ module AMQProxy
           Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
         end
       end
-      yield u
     ensure
       if u.nil?
         @size -= 1
@@ -32,6 +31,7 @@ module AMQProxy
         @lock.synchronize do
           @pools[{ user, password, vhost }].push u
         end
+        yield u
       end
     end
 
