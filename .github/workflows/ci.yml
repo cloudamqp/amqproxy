@@ -5,20 +5,13 @@ jobs:
   spec:
     name: Spec
     runs-on: ubuntu-20.04
-    services:
-      rabbitmq:
-        image: rabbitmq:latest
-        ports:
-          - 5672:5672
-        # needed because the rabbitmq container does not provide a healthcheck
-        options: >-
-          --health-cmd "rabbitmqctl node_health_check"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    container:
-      image: crystallang/crystal:1.1.1
     steps:
+      - name: Install RabbitMQ
+        run: sudo apt-get update && sudo apt-get install -y rabbitmq-server
+
+      - name: Verify RabbitMQ started correctly
+        run: while true; do sudo rabbitmq-diagnostics status 2>/dev/null && break; echo -n .; sleep 2; done
+
       - name: Checkout
         uses: actions/checkout@v2
 
@@ -27,8 +20,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Shards install
+      - name: Install Crystal
+        uses: crystal-lang/install-crystal@v1
+
+      - name: Install shards
         run: shards install
 
-      - name: Spec
+      - name: Run tests
         run: crystal spec --no-color --order random
