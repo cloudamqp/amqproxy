@@ -108,7 +108,7 @@ module AMQProxy
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
       rescue ex : Upstream::Error
-        @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect}" }
+        @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect} (cause: #{ex.cause.inspect})" }
         close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
