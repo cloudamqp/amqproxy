@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.9] - 2022-02-14
+
+### Fixed
+
+- TLS cert verification works for container images again
+
 ## [0.5.8] - 2022-02-01
 
 ### Fixed
