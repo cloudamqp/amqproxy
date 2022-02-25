@@ -13,6 +13,8 @@ dependencies:
     github: cloudamqp/amq-protocol.cr
   logger:
     github: 84codes/logger.cr
+  statsd:
+    github: miketheman/statsd.cr
 
 development_dependencies:
   amqp-client:

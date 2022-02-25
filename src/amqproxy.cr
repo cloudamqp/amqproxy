@@ -1,5 +1,6 @@
 require "./amqproxy/version"
 require "./amqproxy/server"
+require "./amqproxy/metrics_client"
 require "option_parser"
 require "uri"
 require "ini"
@@ -41,6 +42,8 @@ class AMQProxy::CLI
   end
 
   def run
+    statsd_host = ""
+    statsd_port = 8125
     p = OptionParser.parse do |parser|
       parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
       parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
@@ -54,6 +57,8 @@ class AMQProxy::CLI
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
+      parser.on("--statsd-ip=STATSD_IP", "StatsD IP to send metrics to (default disabled)") { |v| statsd_host = v }
+      parser.on("--statsd-port=STATSD_PORT", "StatsD port to send metrics to (default is 8125)") { |v| statsd_port = v.to_i }
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
@@ -71,7 +76,8 @@ class AMQProxy::CLI
     port = u.port || default_port
     tls = u.scheme == "amqps"
 
-    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout)
+    metrics_client = statsd_host.empty? ? DummyMetricsClient.new : StatsdClient.new(statsd_host, statsd_port)
+    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout, metrics_client)
 
     first_shutdown = true
     shutdown = ->(_s : Signal) do

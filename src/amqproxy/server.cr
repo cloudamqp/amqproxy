@@ -7,7 +7,7 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5)
+    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5, @metrics_client : MetricsClient = DummyMetricsClient.new)
       @log = Logger.new(STDOUT)
       @log.level = log_level
       journald =
@@ -24,7 +24,7 @@ module AMQProxy
         io << message
       end
       @clients = Array(Client).new
-      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout)
+      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @metrics_client, @log, idle_connection_timeout)
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -69,6 +69,7 @@ module AMQProxy
       active_client(c) do
         @pool.borrow(user, password, vhost) do |u|
           # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
+          @metrics_client.gauge("connections.client.total", client_connections)
           u.current_client = c
           c.read_loop(u)
         ensure
@@ -77,11 +78,13 @@ module AMQProxy
         end
       rescue ex : Upstream::AccessError
         @log.error { "Access refused for user '#{user}' to vhost '#{vhost}', reason: #{ex.message}" }
+        @metrics_client.increment("connections.upstream.error.count", 1, tags: ["error:access_refused"])
         close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "ACCESS_REFUSED - #{ex.message}", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
       rescue ex : Upstream::Error
         @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect} (cause: #{ex.cause.inspect})" }
+        @metrics_client.increment("connections.upstream.error.count", 1, tags: ["error:upstream_error"])
         close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
@@ -91,6 +94,7 @@ module AMQProxy
     ensure
       @log.debug { "Client disconnected: #{remote_address}" }
       socket.close rescue nil
+      @metrics_client.gauge("connections.client.total", client_connections)
       # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
     end
 
