@@ -2,7 +2,7 @@ require "./spec_helper"
 
 describe AMQProxy::Server do
   it "keeps connections open" do
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, Logger::DEBUG)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
@@ -22,7 +22,7 @@ describe AMQProxy::Server do
   end
 
   it "can reconnect if upstream closes" do
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, Logger::DEBUG)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
@@ -46,7 +46,7 @@ describe AMQProxy::Server do
 
   it "responds to upstream heartbeats" do
     system("sudo rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 1).' > /dev/null").should be_true
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, Logger::DEBUG)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield

@@ -1,4 +1,5 @@
 require "spec"
 require "../src/amqproxy/server"
 require "../src/amqproxy/version"
+require "../src/amqproxy/metrics_client"
 require "amqp-client"

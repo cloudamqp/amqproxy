@@ -12,3 +12,6 @@ shards:
     git: https://github.com/84codes/logger.cr.git
     version: 1.0.1
 
+  statsd:
+    git: https://github.com/miketheman/statsd.cr.git
+    version: 0.3.0
