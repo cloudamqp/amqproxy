@@ -17,7 +17,7 @@ p = OptionParser.parse do |parser|
   parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |p|
     idle_connection_timeout = p.to_i
   end
-  parser.on("--statsd-ip=STATSD_IP", "StatsD IP to send metrics to (default disabled)") { |p| statsd_host = p }
+  parser.on("--statsd-host=STATSD_HOST", "StatsD host to send metrics to (default disabled)") { |p| statsd_host = p }
   parser.on("--statsd-port=STATSD_PORT", "StatsD port to send metrics to (default is 8125)") { |p| statsd_port = p.to_i }
   parser.on("-d", "--debug", "Verbose logging") { |d| log_level = Logger::DEBUG }
   parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
