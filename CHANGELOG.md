@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.11] - 2022-03-06
+
+- Same as 0.5.10, only to test release automation
+
 ## [0.5.10] - 2022-03-06
 
 - Include error cause in upstream error log ([#67](https://github.com/cloudamqp/amqproxy/issues/67))
