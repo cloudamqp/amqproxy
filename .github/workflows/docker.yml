@@ -3,14 +3,9 @@ name: Docker images
 on:
   push:
     branches:
-      - 'master'
+      - master
     tags:
       - 'v*'
-    paths:
-      - 'Dockerfile'
-      - 'shard.yml'
-      - 'shard.lock'
-      - 'src/**'
 
 jobs:
   docker:
