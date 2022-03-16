@@ -1,5 +1,0 @@
-language: crystal
-addons:
-  apt:
-    packages:
-      - rabbitmq-server
