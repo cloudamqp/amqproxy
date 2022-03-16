@@ -1,6 +1,41 @@
 require "./spec_helper"
 
+private def with_server(& : UDPSocket ->)
+  server = UDPSocket.new
+  server.bind("localhost", 1234)
+  yield server
+ensure
+  server.close if server
+end
+
 describe AMQProxy::Server do
+  describe "statsd" do
+    it "sends client connections statsd metrics" do
+      with_server do |statsd_server|
+        statsd_client = AMQProxy::StatsdClient.new("localhost", 1234)
+        s = AMQProxy::Server.new("127.0.0.1", 5672, false, statsd_client, Logger::DEBUG)
+        begin
+          spawn { s.listen("127.0.0.1", 5673) }
+          Fiber.yield
+          10.times do
+            AMQP::Client.start("amqp://localhost:5673") do |conn|
+              conn.channel
+
+              expected_message = "amqproxy.connections.client.total:1|g"
+              statsd_server.gets(expected_message.bytesize).should eq expected_message
+            end
+
+            expected_message = "amqproxy.connections.client.total:0|g"
+            statsd_server.gets(expected_message.bytesize).should eq expected_message
+            sleep 0.1
+          end
+        ensure
+          s.close
+        end
+      end
+    end
+  end
+
   it "keeps connections open" do
     s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, Logger::DEBUG)
     begin
