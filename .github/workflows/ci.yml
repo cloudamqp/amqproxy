@@ -1,5 +1,13 @@
 name: CI
-on: [push]
+on:
+  pull_request:
+  push:
+    paths:
+      - '.github/workflows/ci.yml'
+      - 'shard.yml'
+      - 'shard.lock'
+      - 'src/**'
+      - 'spec/**'
 
 jobs:
   spec:

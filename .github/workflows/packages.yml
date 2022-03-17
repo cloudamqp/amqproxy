@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - 'v*'
 
 jobs:
   static:
@@ -66,3 +68,4 @@ jobs:
           curl -XPOST https://packagecloud.io/api/v1/repos/cloudamqp/amqproxy/packages.json \
             -F "package[distro_version_id]=${dist_id}" \
             -F "package[package_file]=@${debfile}"
+        if: startsWith(github.ref, 'refs/tags/v')
