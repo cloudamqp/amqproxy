@@ -38,7 +38,7 @@ module AMQProxy
         addr = a.ip_address.to_s.rchop(":#{port}")
         break
       }
-      return addr
+      addr
     end
   end
 end
