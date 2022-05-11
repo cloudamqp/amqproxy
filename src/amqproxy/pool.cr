@@ -16,8 +16,8 @@ module AMQProxy
         q = @pools[{ user, password, vhost }]
         q.shift do
           @size += 1
-          Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
           @metrics_client.increment("connections.upstream.created", 1)
+          Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
         end
       end
       yield u
