@@ -70,6 +70,7 @@ module AMQProxy
         @pool.borrow(user, password, vhost) do |u|
           # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
           @metrics_client.gauge("connections.client.total", client_connections)
+          @metrics_client.increment("connections.client.created", 1)
           u.current_client = c
           c.read_loop(u)
         ensure
@@ -95,6 +96,7 @@ module AMQProxy
       @log.debug { "Client disconnected: #{remote_address}" }
       socket.close rescue nil
       @metrics_client.gauge("connections.client.total", client_connections)
+      @metrics_client.increment("connections.client.disconnected", 1)
       # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
     end
 

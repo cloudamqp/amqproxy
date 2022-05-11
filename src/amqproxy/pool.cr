@@ -17,6 +17,7 @@ module AMQProxy
         if c.nil? || c.closed?
           @size += 1
           c = Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
+          @metrics_client.increment("connections.upstream.created", 1)
         end
         c
       end
@@ -64,6 +65,7 @@ module AMQProxy
                 @size -= 1
                 begin
                   u.close "Pooled connection closed due to inactivity"
+                  @metrics_client.increment("connections.upstream.closed", 1)
                 rescue ex
                   @log.error "Problem closing upstream: #{ex.inspect}"
                 end
