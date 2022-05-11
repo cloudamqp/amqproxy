@@ -1,5 +1,6 @@
 require "./amqproxy/version"
 require "./amqproxy/server"
+require "./amqproxy/metrics_client"
 require "option_parser"
 require "uri"
 require "ini"
@@ -39,7 +40,7 @@ class AMQProxy::CLI
         section.each do |key, value|
           case key
           when "host" then @statsd_host = value
-          when "port" then @statsd_port = value
+          when "port" then @statsd_port = value.to_i
           else             raise "Unsupported config #{name}/#{key}"
           end
         end
