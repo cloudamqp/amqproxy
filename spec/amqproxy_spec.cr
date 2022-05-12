@@ -17,16 +17,31 @@ describe AMQProxy::Server do
         begin
           spawn { s.listen("127.0.0.1", 5673) }
           Fiber.yield
+          i = 0
           10.times do
+            i = i + 1
             AMQP::Client.start("amqp://localhost:5673") do |conn|
               conn.channel
 
+              # This is also testing that connection pooling is working
+              if i == 1
+                expected_message = "amqproxy.connections.upstream.created:1|c|@1"
+                statsd_server.gets(expected_message.bytesize).should eq expected_message
+              end
+
               expected_message = "amqproxy.connections.client.total:1|g"
+              statsd_server.gets(expected_message.bytesize).should eq expected_message
+
+              expected_message = "amqproxy.connections.client.created:1|c|@1"
               statsd_server.gets(expected_message.bytesize).should eq expected_message
             end
 
             expected_message = "amqproxy.connections.client.total:0|g"
             statsd_server.gets(expected_message.bytesize).should eq expected_message
+
+            expected_message = "amqproxy.connections.client.disconnected:1|c|@1"
+            statsd_server.gets(expected_message.bytesize).should eq expected_message
+
             sleep 0.1
           end
         ensure
