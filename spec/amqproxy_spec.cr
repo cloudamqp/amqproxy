@@ -12,8 +12,10 @@ describe AMQProxy::Server do
   describe "statsd" do
     it "sends client connections statsd metrics" do
       with_server do |statsd_server|
-        statsd_client = AMQProxy::StatsdClient.new("localhost", 1234)
-        s = AMQProxy::Server.new("127.0.0.1", 5672, false, statsd_client, Logger::DEBUG)
+        logger = Logger.new(STDOUT)
+        logger.level = Logger::DEBUG
+        statsd_client = AMQProxy::StatsdClient.new(logger, "localhost", 1234)
+        s = AMQProxy::Server.new("127.0.0.1", 5672, false, statsd_client, logger)
         begin
           spawn { s.listen("127.0.0.1", 5673) }
           Fiber.yield
@@ -52,7 +54,9 @@ describe AMQProxy::Server do
   end
 
   it "keeps connections open" do
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, Logger::DEBUG)
+    logger = Logger.new(STDOUT)
+    logger.level = Logger::DEBUG
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, logger)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
@@ -72,7 +76,9 @@ describe AMQProxy::Server do
   end
 
   it "can reconnect if upstream closes" do
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, Logger::DEBUG)
+    logger = Logger.new(STDOUT)
+    logger.level = Logger::DEBUG
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, logger)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
