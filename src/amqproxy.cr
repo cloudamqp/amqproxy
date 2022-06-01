@@ -86,7 +86,6 @@ class AMQProxy::CLI
 
     metrics_client = @statsd_host.empty? ? DummyMetricsClient.new : StatsdClient.new(@statsd_host, @statsd_port)
     server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout, metrics_client)
-
     first_shutdown = true
     shutdown = ->(_s : Signal) do
       if first_shutdown
