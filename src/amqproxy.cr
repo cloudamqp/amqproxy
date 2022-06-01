@@ -84,8 +84,24 @@ class AMQProxy::CLI
     port = u.port || default_port
     tls = u.scheme == "amqps"
 
-    metrics_client = @statsd_host.empty? ? AMQProxy::DummyMetricsClient.new : AMQProxy::StatsdClient.new(@statsd_host, @statsd_port)
-    server = AMQProxy::Server.new(u.host || "", port, tls, metrics_client, @log_level, @idle_connection_timeout)
+    logger = Logger.new(STDOUT)
+    logger.level = @log_level
+    journald =
+      {% if flag?(:unix) %}
+        if journal_stream = ENV.fetch("JOURNAL_STREAM", nil)
+          stdout_stat = STDOUT.info.@stat
+          journal_stream == "#{stdout_stat.st_dev}:#{stdout_stat.st_ino}"
+        end
+      {% else %}
+        false
+      {% end %}
+    logger.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
+      io << datetime << ": " unless journald
+      io << message
+    end
+
+    metrics_client = @statsd_host.empty? ? AMQProxy::DummyMetricsClient.new : AMQProxy::StatsdClient.new(logger, @statsd_host, @statsd_port)
+    server = AMQProxy::Server.new(u.host || "", port, tls, metrics_client, logger, @idle_connection_timeout)
 
     shutdown = ->(_s : Signal) do
       server.close
