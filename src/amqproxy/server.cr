@@ -14,7 +14,7 @@ module AMQProxy
       @log = logger
       @clients = Array(Client).new
       @metrics_client = metrics_client
-      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @metrics_client, @log, idle_connection_timeout)
+      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout, @metrics_client)
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
