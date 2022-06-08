@@ -13,12 +13,14 @@ module AMQProxy
 
     def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
       u = @lock.synchronize do
-        q = @pools[{user, password, vhost}]
-        q.pop do
+        c = @pools[{user, password, vhost}].pop?
+        if c.nil? || c.closed?
           @size += 1
-          Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
+          c = Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
         end
+        c
       end
+
       yield u
     ensure
       if u.nil?
@@ -65,6 +67,9 @@ module AMQProxy
                 rescue ex
                   @log.error "Problem closing upstream: #{ex.inspect}"
                 end
+              elsif u.closed?
+                @size -= 1
+                @log.error "Removing closed upstream connection from pool"
               else
                 q.push u
               end
