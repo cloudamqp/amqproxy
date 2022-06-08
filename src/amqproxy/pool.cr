@@ -2,7 +2,7 @@ module AMQProxy
   class Pool
     getter :size
 
-    def initialize(@host : String, @port : Int32, @tls : Bool, @metrics_client : MetricsClient, @log : Logger, @idle_connection_timeout : Int32)
+    def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger, @idle_connection_timeout : Int32, @metrics_client : MetricsClient = DummyMetricsClient.new)
       @pools = Hash(Tuple(String, String, String), Deque(Upstream)).new do |h, k|
         h[k] = Deque(Upstream).new
       end
