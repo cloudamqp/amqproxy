@@ -14,7 +14,7 @@ module AMQProxy
     def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
       u = @lock.synchronize do
         q = @pools[{ user, password, vhost }]
-        q.shift do
+        q.pop do
           @size += 1
           @metrics_client.increment("connections.upstream.created", 1)
           Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
