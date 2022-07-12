@@ -91,25 +91,28 @@ module AMQProxy
     # This function will be called by the close method and at the end of the listen loop, to make sure that
     # the program exits and the close method only starts closing the socket etc. after all connections are drained.
     # This means that it is called twice (on SIGTERM/SIGINT and always at the end),
-    # thus we make sure that the logs are only generated on SIGTERM/SIGINT via the `verbose` parameter
-    def wait_for_drain(verbose = false)
+    # thus we make sure that the logs are only generated on SIGTERM/SIGINT via the `from_close_call` parameter
+    def wait_for_drain(from_close_call = false)
       if !@graceful_shutdown
-        if verbose
+        if from_close_call
           @log.info "Skip waiting for open connections to be closed by remote"
         end
         return
       end
-      if verbose
+      if from_close_call
         @log.info "Waiting for open connections to be closed by remote"
       end
       while @clients.size > 0
-        if verbose
-          @log.debug "#{@clients.size} client(s) remaining"
+        if from_close_call
+          @log.info "#{@clients.size} client(s) remaining"
           @clients.each do |client|
             @log.debug "- Client #{client.socket.as(TCPSocket).remote_address} since #{(client.lifetime.total_minutes.floor.to_i)}m #{client.lifetime.seconds}s"
           end
         end
-        sleep 5
+        sleep 20
+      end
+      if from_close_call
+        @log.info "All connections closed. Stopping server"
       end
     end
 
