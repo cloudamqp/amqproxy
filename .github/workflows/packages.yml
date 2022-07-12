@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        image: ['ubuntu:focal', 'ubuntu:bionic', 'debian:buster']
+        image: ['ubuntu:focal', 'ubuntu:bionic', 'debian:buster', 'debian:bullseye']
       fail-fast: false
     container:
       image: ${{ matrix.image }}
@@ -40,7 +40,7 @@ jobs:
         run: env DEBIAN_FRONTEND=noninteractive apt-get install -y libsystemd-dev dpkg fakeroot help2man lintian build-essential gcc pkg-config git tzdata libpcre3-dev libevent-dev libyaml-dev libgmp-dev libssl-dev libxml2-dev zlib1g-dev curl jq
 
       - name: Install Crystal
-        run: curl -fsSL https://crystal-lang.org/install.sh | bash -s -- --version=1.1
+        run: curl -fsSL https://crystal-lang.org/install.sh | bash -s -- --version=1.5
 
       - name: Checkout
         uses: actions/checkout@v2
