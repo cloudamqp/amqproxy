@@ -9,6 +9,7 @@ class AMQProxy::CLI
   @listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @log_level : Logger::Severity = Logger::INFO
+  @graceful_shutdown = false
   @idle_connection_timeout = 5
   @upstream = ENV["AMQP_URL"]?
 
@@ -20,6 +21,7 @@ class AMQProxy::CLI
           case key
           when "upstream"                then @upstream = value
           when "log_level"               then @log_level = Logger::Severity.parse(value)
+          when "graceful_shutdown"       then @graceful_shutdown = (value == "true")
           when "idle_connection_timeout" then @idle_connection_timeout = value.to_i
           else                                raise "Unsupported config #{name}/#{key}"
           end
@@ -51,6 +53,7 @@ class AMQProxy::CLI
         @idle_connection_timeout = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = Logger::DEBUG }
+      parser.on("-g", "--graceful_shutdown", "Reject new connections and wait for established conenctions to be closed before shutting down") { @graceful_shutdown = true }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
@@ -71,9 +74,14 @@ class AMQProxy::CLI
     port = u.port || default_port
     tls = u.scheme == "amqps"
 
-    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout)
+    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout, @graceful_shutdown)
 
+    @got_sigterm = false
     shutdown = ->(_s : Signal) do
+      if @got_sigterm
+        return
+      end
+      @got_sigterm = true
       server.close
       exit 0
     end

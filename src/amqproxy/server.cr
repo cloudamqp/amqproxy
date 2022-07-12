@@ -9,8 +9,9 @@ require "./upstream"
 module AMQProxy
   class Server
     @running = true
+    @draining = false
 
-    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5)
+    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5, graceful_shutdown = false)
       @log = Logger.new(STDOUT)
       @log.level = log_level
       journald =
@@ -28,6 +29,7 @@ module AMQProxy
       end
       @clients = Array(Client).new
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout)
+      @graceful_shutdown = graceful_shutdown
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -44,13 +46,18 @@ module AMQProxy
       @log.info "Proxy listening on #{socket.local_address}"
       while @running
         if client = socket.accept?
+          if @draining
+            @log.debug "Rejecting new connection #{client.remote_address}"
+            client.close()
+            next
+          end
           addr = client.remote_address
           spawn handle_connection(client, addr), name: "handle connection #{addr}"
         else
           break
         end
       end
-      @log.info "Proxy stopping accepting connections"
+      wait_for_drain
     end
 
     def listen_tls(address, port, cert_path : String, key_path : String)
@@ -61,6 +68,11 @@ module AMQProxy
       @log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
       while @running
         if client = socket.accept?
+          if @draining
+            @log.debug "Rejecting new connection #{client.remote_address}"
+            client.close()
+            next
+          end
           begin
             addr = client.remote_address
             ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
@@ -73,10 +85,38 @@ module AMQProxy
           break
         end
       end
-      @log.info "Proxy stopping accepting connections"
+      wait_for_drain
+    end
+
+    # This function will be called by the close method and at the end of the listen loop, to make sure that
+    # the program exits and the close method only starts closing the socket etc. after all connections are drained.
+    # This means that it is called twice (on SIGTERM/SIGINT and always at the end),
+    # thus we make sure that the logs are only generated on SIGTERM/SIGINT via the `verbose` parameter
+    def wait_for_drain(verbose = false)
+      if !@graceful_shutdown
+        if verbose
+          @log.info "Skip waiting for open connections to be closed by remote"
+        end
+        return
+      end
+      if verbose
+        @log.info "Waiting for open connections to be closed by remote"
+      end
+      while @clients.size > 0
+        if verbose
+          @log.debug "#{@clients.size} client(s) remaining"
+          @clients.each do |client|
+            @log.debug "- Client #{client.socket.as(TCPSocket).remote_address} since #{(client.lifetime.total_minutes.floor.to_i)}m #{client.lifetime.seconds}s"
+          end
+        end
+        sleep 5
+      end
     end
 
     def close
+      @log.info "Proxy stopping accepting connections"
+      @draining = true
+      wait_for_drain(true)
       @running = false
       @socket.try &.close
       @clients.each &.close

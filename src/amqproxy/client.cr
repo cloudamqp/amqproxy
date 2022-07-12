@@ -6,6 +6,7 @@ module AMQProxy
     @closed = false
 
     def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
+      @started = Time.utc
     end
 
     def read_loop(upstream : Upstream)
@@ -69,6 +70,14 @@ module AMQProxy
     def close_socket
       @closed = true
       @socket.close rescue nil
+    end
+
+    def socket
+      @socket
+    end
+
+    def lifetime
+      Time.utc - @started
     end
 
     def self.negotiate(socket)
