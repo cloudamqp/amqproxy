@@ -4,13 +4,13 @@ abort "Usage: #{PROGRAM_NAME} <amqp-url> <client-count> <msg-count-per-client>" 
 url, conns, msgs = ARGV
 puts "Publishing #{msgs} msgs on #{conns} connections"
 done = Channel(Nil).new
-conns.to_i.times do |idx|
+conns.to_i.times do |_idx|
   spawn do
     AMQP::Client.start(url) do |c|
       c.channel do |ch|
         q = ch.queue("test")
-        msgs.to_i.times do |idx|
-          q.publish "msg #{idx}"
+        msgs.to_i.times do |msg_idx|
+          q.publish "msg #{msg_idx}"
         end
       end
     end

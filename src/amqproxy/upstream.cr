@@ -38,7 +38,7 @@ module AMQProxy
     end
 
     # Frames from upstream (to client)
-    def read_loop
+    def read_loop # ameba:disable Metrics/CyclomaticComplexity
       socket = @socket
       loop do
         AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
@@ -60,7 +60,7 @@ module AMQProxy
             rescue ex
               @log.error "#{frame.inspect} could not be sent to client: #{ex.inspect}"
               @current_client = nil # don't try to write to this client again
-              client.close_socket # close the socket of the client so that the client's read_loop exits
+              client.close_socket   # close the socket of the client so that the client's read_loop exits
               # If a body frame was written you can't be sure how far it got
               # The only safe thing is to close the upstream connection
               if frame.is_a? AMQ::Protocol::Frame::Body
@@ -91,7 +91,7 @@ module AMQProxy
       @socket.close unless @socket.closed?
     end
 
-    SAFE_BASIC_METHODS = { 40, 10 }
+    SAFE_BASIC_METHODS = {40, 10}
 
     # Send frames to upstream (often from the client)
     def write(frame : AMQ::Protocol::Frame)
@@ -155,23 +155,24 @@ module AMQProxy
       @socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
       @socket.flush
 
-      start = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
+      # assert correct frame type
+      AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
 
       props = AMQ::Protocol::Table.new({
-        "product" => "AMQProxy",
-        "version" => AMQProxy::VERSION,
+        "product"      => "AMQProxy",
+        "version"      => AMQProxy::VERSION,
         "capabilities" => {
           "authentication_failure_close" => true,
-          "consumer_cancel_notify" => false,
-          "publisher_confirms" => true,
-          "exchange_exchange_bindings" => true,
-          "basic.nack" => true,
-          "per_consumer_qos" => true,
-          "connection.blocked" => true
-        } of String => AMQ::Protocol::Field
+          "consumer_cancel_notify"       => false,
+          "publisher_confirms"           => true,
+          "exchange_exchange_bindings"   => true,
+          "basic.nack"                   => true,
+          "per_consumer_qos"             => true,
+          "connection.blocked"           => true,
+        } of String => AMQ::Protocol::Field,
       } of String => AMQ::Protocol::Field)
       start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
-                                                               client_properties: props, mechanism: "PLAIN", locale: "en_US")
+        client_properties: props, mechanism: "PLAIN", locale: "en_US")
       start_ok.to_io @socket, IO::ByteFormat::NetworkEndian
       @socket.flush
 
@@ -184,7 +185,7 @@ module AMQProxy
       open.to_io @socket, IO::ByteFormat::NetworkEndian
       @socket.flush
 
-      open_ok = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |f|
+      AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |f|
         case f
         when AMQ::Protocol::Frame::Connection::Close
           close_ok = AMQ::Protocol::Frame::Connection::CloseOk.new
@@ -204,7 +205,9 @@ module AMQProxy
     end
 
     class Error < Exception; end
+
     class AccessError < Error; end
+
     class WriteError < Error; end
   end
 end

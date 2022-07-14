@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- [Bump dependencies](https://github.com/cloudamqp/amqproxy/commit/3cb5a4b6fdaf9ee2c58dc6cb9bdb8a09a7315669)
+- Fix bug with connection pool shrinking ([#70](https://github.com/cloudamqp/amqproxy/pull/70))
+- Support for config files ([#64](https://github.com/cloudamqp/amqproxy/issues/64))
+
 ## [0.5.11] - 2022-03-06
 
 - Same as 0.5.10, only to test release automation

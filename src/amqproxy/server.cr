@@ -22,7 +22,7 @@ module AMQProxy
         {% else %}
           false
         {% end %}
-      @log.formatter = Logger::Formatter.new do |severity, datetime, progname, message, io|
+      @log.formatter = Logger::Formatter.new do |_severity, datetime, _progname, message, io|
         io << datetime << ": " unless journald
         io << message
       end

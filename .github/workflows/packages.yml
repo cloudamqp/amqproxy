@@ -13,7 +13,7 @@ jobs:
     container:
       image: crystallang/crystal:latest-alpine
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install Dependencies
         run: shards install --production
       - name: Build
@@ -40,10 +40,10 @@ jobs:
         run: env DEBIAN_FRONTEND=noninteractive apt-get install -y libsystemd-dev dpkg fakeroot help2man lintian build-essential gcc pkg-config git tzdata libpcre3-dev libevent-dev libyaml-dev libgmp-dev libssl-dev libxml2-dev zlib1g-dev curl jq
 
       - name: Install Crystal
-        run: curl -fsSL https://crystal-lang.org/install.sh | bash -s -- --version=1.5
+        run: curl -fsSL https://crystal-lang.org/install.sh | bash -s -- --version=latest
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 

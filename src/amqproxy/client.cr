@@ -55,15 +55,15 @@ module AMQProxy
 
     def upstream_disconnected
       write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
-                                                        "UPSTREAM_ERROR",
-                                                        0_u16, 0_u16)
+        "UPSTREAM_ERROR",
+        0_u16, 0_u16)
     rescue WriteError
     end
 
     def close
       write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
-                                                        "AMQProxy shutdown",
-                                                        0_u16, 0_u16)
+        "AMQProxy shutdown",
+        0_u16, 0_u16)
     end
 
     def close_socket
@@ -98,7 +98,7 @@ module AMQProxy
         when "AMQPLAIN"
           io = IO::Memory.new(start_ok.response)
           tbl = AMQ::Protocol::Table.from_io(io, IO::ByteFormat::NetworkEndian,
-                                             start_ok.response.size.to_u32)
+            start_ok.response.size.to_u32)
           user = tbl["LOGIN"].as(String)
           password = tbl["PASSWORD"].as(String)
         else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
@@ -109,7 +109,7 @@ module AMQProxy
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |tune_ok|
+      AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |_tune_ok|
       end
 
       vhost = ""
@@ -122,14 +122,17 @@ module AMQProxy
       open_ok.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      { vhost, user, password }
+      {vhost, user, password}
     rescue ex
       raise NegotiationError.new "Client negotiation failed", ex
     end
 
     class Error < Exception; end
+
     class ReadError < Error; end
+
     class WriteError < Error; end
+
     class NegotiationError < Error; end
   end
 end
