@@ -13,7 +13,7 @@ module AMQProxy
 
     def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
       u = @lock.synchronize do
-        q = @pools[{ user, password, vhost }]
+        q = @pools[{user, password, vhost}]
         q.pop do
           @size += 1
           Upstream.new(@host, @port, @tls, @log).connect(user, password, vhost)
@@ -30,7 +30,7 @@ module AMQProxy
       else
         u.last_used = Time.monotonic
         @lock.synchronize do
-          @pools[{ user, password, vhost }].push u
+          @pools[{user, password, vhost}].push u
         end
       end
     end
