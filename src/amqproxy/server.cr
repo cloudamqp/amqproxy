@@ -11,7 +11,7 @@ module AMQProxy
     @running = true
     @draining = false
 
-    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5, graceful_shutdown = false)
+    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5, graceful_shutdown = false, graceful_shutdown_timeout = 0)
       @log = Logger.new(STDOUT)
       @log.level = log_level
       journald =
@@ -30,6 +30,7 @@ module AMQProxy
       @clients = Array(Client).new
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout)
       @graceful_shutdown = graceful_shutdown
+      @graceful_shutdown_timeout = graceful_shutdown_timeout
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -48,7 +49,7 @@ module AMQProxy
         if client = socket.accept?
           if @draining
             @log.debug "Rejecting new connection #{client.remote_address}"
-            client.close()
+            client.close
             next
           end
           addr = client.remote_address
@@ -57,7 +58,6 @@ module AMQProxy
           break
         end
       end
-      wait_for_drain
     end
 
     def listen_tls(address, port, cert_path : String, key_path : String)
@@ -70,7 +70,7 @@ module AMQProxy
         if client = socket.accept?
           if @draining
             @log.debug "Rejecting new connection #{client.remote_address}"
-            client.close()
+            client.close
             next
           end
           begin
@@ -85,41 +85,38 @@ module AMQProxy
           break
         end
       end
-      wait_for_drain
     end
 
-    # This function will be called by the close method and at the end of the listen loop, to make sure that
-    # the program exits and the close method only starts closing the socket etc. after all connections are drained.
-    # This means that it is called twice (on SIGTERM/SIGINT and always at the end),
-    # thus we make sure that the logs are only generated on SIGTERM/SIGINT via the `from_close_call` parameter
-    def wait_for_drain(from_close_call = false)
-      if !@graceful_shutdown
-        if from_close_call
-          @log.info "Skip waiting for open connections to be closed by remote"
-        end
-        return
-      end
-      if from_close_call
-        @log.info "Waiting for open connections to be closed by remote"
-      end
+    def wait_for_drain
+      @draining = true
+      @log.info "Waiting for open connections to be closed by remote"
+      last_client_debug_log = 0
+      drain_started = Time.utc.to_unix
       while @clients.size > 0
-        if from_close_call
+        current_time = Time.utc.to_unix
+        if (last_client_debug_log < current_time - 15)
+          last_client_debug_log = current_time
           @log.info "#{@clients.size} client(s) remaining"
           @clients.each do |client|
             @log.debug "- Client #{client.socket.as(TCPSocket).remote_address} since #{(client.lifetime.total_minutes.floor.to_i)}m #{client.lifetime.seconds}s"
           end
         end
-        sleep 20
+        if @graceful_shutdown_timeout > 0 && current_time - drain_started > @graceful_shutdown_timeout
+          @log.info "Forcing shutdown after #{@graceful_shutdown_timeout} seconds"
+          break
+        end
+        sleep 500.milliseconds
       end
-      if from_close_call
-        @log.info "All connections closed. Stopping server"
-      end
+      @log.info "All connections closed. Stopping server"
     end
 
-    def close
-      @log.info "Proxy stopping accepting connections"
-      @draining = true
-      wait_for_drain(true)
+    def close(force = false)
+      if force
+        @log.info "Forcing shutdown after signal"
+      else
+        @log.info "Proxy stopping accepting connections"
+      end
+      wait_for_drain if @graceful_shutdown && !force
       @running = false
       @socket.try &.close
       @clients.each &.close
