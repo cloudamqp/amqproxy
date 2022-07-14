@@ -25,7 +25,7 @@ class AMQProxy::CLI
           when "graceful_shutdown"         then @graceful_shutdown = (value == "true")
           when "graceful_shutdown_timeout" then @graceful_shutdown_timeout = value.to_i
           when "idle_connection_timeout"   then @idle_connection_timeout = value.to_i
-          else                                raise "Unsupported config #{name}/#{key}"
+          else                                  raise "Unsupported config #{name}/#{key}"
           end
         end
       when "listen"
