@@ -13,7 +13,9 @@ In our benchmarks publishing one message per connection to a server (using TLS) 
 
 ## Installation
 
-Debian/Ubuntu:
+### Debian/Ubuntu
+
+Packages are uploaded to [Packagecloud](https://packagecloud.io/cloudamqp/amqproxy). Install the latest version with:
 
 ```sh
 wget -qO- https://packagecloud.io/cloudamqp/amqproxy/gpgkey | sudo apt-key add -
@@ -23,11 +25,13 @@ sudo apt update
 sudo apt install amqproxy
 ```
 
-Docker/Podman:
+### Docker/Podman
 
 Docker images are published at [Docker Hub](https://hub.docker.com/r/cloudamqp/amqproxy). Fetch and run the latest version with:
 
-`docker run --rm -it -p 5673:5673 cloudamqp/amqproxy amqp://SERVER:5672`
+```sh
+docker run --rm -it -p 5673:5673 cloudamqp/amqproxy amqp://SERVER:5672
+```
 
 Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
 
