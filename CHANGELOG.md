@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2022-07-14
+
+- Build package for Debian 11 (bullseye) ([#73](https://github.com/cloudamqp/amqproxy/issues/73))
 - [Bump dependencies](https://github.com/cloudamqp/amqproxy/commit/3cb5a4b6fdaf9ee2c58dc6cb9bdb8a09a7315669)
 - Fix bug with connection pool shrinking ([#70](https://github.com/cloudamqp/amqproxy/pull/70))
 - Support for config files ([#64](https://github.com/cloudamqp/amqproxy/issues/64))
