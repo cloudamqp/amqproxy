@@ -109,7 +109,7 @@ module AMQProxy
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |tune_ok|
+      AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |_tune_ok|
       end
 
       vhost = ""

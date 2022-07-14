@@ -38,7 +38,7 @@ module AMQProxy
     end
 
     # Frames from upstream (to client)
-    def read_loop
+    def read_loop # ameba:disable Metrics/CyclomaticComplexity
       socket = @socket
       loop do
         AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
@@ -155,7 +155,8 @@ module AMQProxy
       @socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
       @socket.flush
 
-      start = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
+      # assert correct frame type
+      AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
 
       props = AMQ::Protocol::Table.new({
         "product"      => "AMQProxy",
@@ -184,7 +185,7 @@ module AMQProxy
       open.to_io @socket, IO::ByteFormat::NetworkEndian
       @socket.flush
 
-      open_ok = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |f|
+      AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) do |f|
         case f
         when AMQ::Protocol::Frame::Connection::Close
           close_ok = AMQ::Protocol::Frame::Connection::CloseOk.new
