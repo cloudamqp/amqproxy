@@ -55,8 +55,8 @@ class AMQProxy::CLI
         @idle_connection_timeout = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = Logger::DEBUG }
-      parser.on("-g", "--graceful_shutdown", "Reject new connections and wait for established connections to be closed before shutting down") { @graceful_shutdown = true }
-      parser.on("-f GRACEFUL_SHUTDOWN_TIMEOUT", "--graceful_shutdown_timeout=SECONDS", "If using graceful_shutdown: Maximum time in seconds to wait until forcing shutdown (disable: 0, default: 0)") do |v|
+      parser.on("-g", "--graceful-shutdown", "Reject new connections and wait for established connections to be closed before shutting down") { @graceful_shutdown = true }
+      parser.on("-f GRACEFUL_SHUTDOWN_TIMEOUT", "--graceful-shutdown-timeout=SECONDS", "If using graceful-shutdown: Maximum time in seconds to wait until forcing shutdown (disable: 0, default: 0)") do |v|
         @graceful_shutdown_timeout = v.to_i
       end
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
@@ -81,13 +81,13 @@ class AMQProxy::CLI
 
     server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout, @graceful_shutdown, @graceful_shutdown_timeout)
 
-    @got_sigterm = false
+    @got_shutdown_signal = false
     shutdown = ->(_s : Signal) do
-      if @got_sigterm
-        server.close(true) if _s == Signal::INT
-        return
+      if @got_shutdown_signal
+        server.close(true)
+        exit 0
       end
-      @got_sigterm = true
+      @got_shutdown_signal = true
       server.close
       exit 0
     end

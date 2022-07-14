@@ -101,7 +101,7 @@ module AMQProxy
             @log.debug "- Client #{client.socket.as(TCPSocket).remote_address} since #{(client.lifetime.total_minutes.floor.to_i)}m #{client.lifetime.seconds}s"
           end
         end
-        if @graceful_shutdown_timeout > 0 && current_time - drain_started > @graceful_shutdown_timeout
+        if @graceful_shutdown_timeout > 0 && Time.utc.to_unix - drain_started > @graceful_shutdown_timeout
           @log.info "Forcing shutdown after #{@graceful_shutdown_timeout} seconds"
           break
         end
