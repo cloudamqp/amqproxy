@@ -42,7 +42,7 @@ module AMQProxy
       @pool.size
     end
 
-    def running
+    def running?
       @running
     end
 
