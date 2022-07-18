@@ -84,9 +84,9 @@ describe AMQProxy::Server do
       Fiber.yield
       AMQP::Client.start("amqp://localhost:5673") do |conn|
         conn.channel
-        system("sudo rabbitmqctl stop_app > /dev/null").should be_true
+        system("#{MAYBE_SUDO}rabbitmqctl stop_app > /dev/null").should be_true
       end
-      system("sudo rabbitmqctl start_app > /dev/null").should be_true
+      system("#{MAYBE_SUDO}rabbitmqctl start_app > /dev/null").should be_true
       AMQP::Client.start("amqp://localhost:5673") do |conn|
         conn.channel
         s.client_connections.should eq(1)
@@ -103,7 +103,7 @@ describe AMQProxy::Server do
   it "responds to upstream heartbeats" do
     logger = Logger.new(STDOUT)
     logger.level = Logger::DEBUG
-    system("sudo rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 1).' > /dev/null").should be_true
+    system("#{MAYBE_SUDO}rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 1).' > /dev/null").should be_true
     s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, logger)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
@@ -116,7 +116,7 @@ describe AMQProxy::Server do
       s.upstream_connections.should eq(1)
     ensure
       s.close
-      system("sudo rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 60).' > /dev/null").should be_true
+      system("#{MAYBE_SUDO}rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 60).' > /dev/null").should be_true
     end
   end
 end

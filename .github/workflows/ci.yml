@@ -21,16 +21,18 @@ jobs:
         run: while true; do sudo rabbitmq-diagnostics status 2>/dev/null && break; echo -n .; sleep 2; done
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Crystal Ameba Linter
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: crystal-ameba/github-action@v0.2.12
+        uses: crystal-ameba/github-action@v0.3.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: latest
 
       - name: Install shards
         run: shards install

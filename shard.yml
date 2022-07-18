@@ -1,5 +1,5 @@
 name: amqproxy
-version: 0.5.11
+version: 0.6.1
 
 authors:
   - CloudAMQP <contact@cloudamqp.com>
@@ -20,6 +20,6 @@ development_dependencies:
   amqp-client:
     github: cloudamqp/amqp-client.cr
 
-crystal: 1.0.0
+crystal: 1.5.0
 
 license: MIT
