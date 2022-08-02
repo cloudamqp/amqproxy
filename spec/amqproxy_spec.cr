@@ -122,8 +122,10 @@ describe AMQProxy::Server do
 
   it "supports waiting for client connections on graceful shutdown" do
     started = Time.utc.to_unix
+    logger = Logger.new(STDOUT)
+    logger.level = Logger::DEBUG
 
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG, 5)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, AMQProxy::DummyMetricsClient.new, logger, 5)
     wait_for_channel = Channel(Int32).new # channel used to wait for certain calls, to test certain behaviour
     spawn do
       s.listen("127.0.0.1", 5673)
