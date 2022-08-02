@@ -1,5 +1,6 @@
 require "./amqproxy/version"
 require "./amqproxy/server"
+require "./amqproxy/metrics_client"
 require "option_parser"
 require "uri"
 require "ini"
@@ -11,6 +12,8 @@ class AMQProxy::CLI
   @log_level : Logger::Severity = Logger::INFO
   @idle_connection_timeout = 5
   @upstream = ENV["AMQP_URL"]?
+  @statsd_host = ""
+  @statsd_port = 8125
 
   def parse_config(path)
     INI.parse(File.read(path)).each do |name, section|
@@ -31,6 +34,14 @@ class AMQProxy::CLI
           when "bind", "address" then @listen_address = value
           when "log_level"       then @log_level = Logger::Severity.parse(value)
           else                        raise "Unsupported config #{name}/#{key}"
+          end
+        end
+      when "statsd"
+        section.each do |key, value|
+          case key
+          when "host" then @statsd_host = value
+          when "port" then @statsd_port = value.to_i
+          else             raise "Unsupported config #{name}/#{key}"
           end
         end
       else raise "Unsupported config section #{name}"
@@ -54,6 +65,8 @@ class AMQProxy::CLI
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
+      parser.on("--statsd-ip=STATSD_IP", "StatsD IP to send metrics to (default disabled)") { |v| @statsd_host = v }
+      parser.on("--statsd-port=STATSD_PORT", "StatsD port to send metrics to (default is 8125)") { |v| @statsd_port = v.to_i }
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
@@ -71,8 +84,8 @@ class AMQProxy::CLI
     port = u.port || default_port
     tls = u.scheme == "amqps"
 
-    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout)
-
+    metrics_client = @statsd_host.empty? ? DummyMetricsClient.new : StatsdClient.new(@statsd_host, @statsd_port)
+    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout, metrics_client)
     first_shutdown = true
     shutdown = ->(_s : Signal) do
       if first_shutdown
