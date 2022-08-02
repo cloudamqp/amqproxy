@@ -47,7 +47,7 @@ describe AMQProxy::Server do
             sleep 0.1
           end
         ensure
-          s.close
+          s.disconnect_clients
         end
       end
     end
