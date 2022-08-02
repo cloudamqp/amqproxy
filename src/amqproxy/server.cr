@@ -8,8 +8,6 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    @running = true
-
     def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5)
       @log = Logger.new(STDOUT)
       @log.level = log_level
@@ -42,45 +40,21 @@ module AMQProxy
     def listen(address, port)
       @socket = socket = TCPServer.new(address, port)
       @log.info "Proxy listening on #{socket.local_address}"
-      while @running
-        if client = socket.accept?
-          addr = client.remote_address
-          spawn handle_connection(client, addr), name: "handle connection #{addr}"
-        else
-          break
-        end
+      while client = socket.accept?
+        addr = client.remote_address
+        spawn handle_connection(client, addr), name: "handle connection #{addr}"
       end
       @log.info "Proxy stopping accepting connections"
     end
 
-    def listen_tls(address, port, cert_path : String, key_path : String)
-      @socket = socket = TCPServer.new(address, port)
-      context = OpenSSL::SSL::Context::Server.new
-      context.private_key = key_path
-      context.certificate_chain = cert_path
-      @log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
-      while @running
-        if client = socket.accept?
-          begin
-            addr = client.remote_address
-            ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
-            ssl_client.sync_close = true
-            spawn handle_connection(ssl_client, addr), name: "handle connection #{addr} (tls)"
-          rescue e : OpenSSL::SSL::Error
-            @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"
-          end
-        else
-          break
-        end
-      end
-      @log.info "Proxy stopping accepting connections"
-    end
-
-    def close
-      @running = false
+    def stop_accepting_clients
       @socket.try &.close
-      @clients.each &.close
-      @pool.try &.close
+    end
+
+    def disconnect_clients
+      @clients.each &.close        # send Connection#Close frames
+      sleep 1                      # wait for clients to disconnect voluntarily
+      @clients.each &.close_socket # close sockets forcefully
     end
 
     private def handle_connection(socket, remote_address)
