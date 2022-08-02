@@ -17,7 +17,7 @@ describe AMQProxy::Server do
       s.client_connections.should eq 0
       s.upstream_connections.should eq 1
     ensure
-      s.close
+      s.stop_accepting_clients
     end
   end
 
@@ -40,7 +40,7 @@ describe AMQProxy::Server do
       s.client_connections.should eq(0)
       s.upstream_connections.should eq(1)
     ensure
-      s.close
+      s.stop_accepting_clients
     end
   end
 
@@ -57,7 +57,7 @@ describe AMQProxy::Server do
       s.client_connections.should eq(0)
       s.upstream_connections.should eq(1)
     ensure
-      s.close
+      s.stop_accepting_clients
       system("#{MAYBE_SUDO}rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 60).' > /dev/null").should be_true
     end
   end
