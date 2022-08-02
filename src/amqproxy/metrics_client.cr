@@ -18,10 +18,9 @@ module AMQProxy
   class StatsdClient < MetricsClient
     PREFIX = "amqproxy"
 
-    def initialize(log : Logger, statsd_host : String, statsd_port : Int32)
+    def initialize(statsd_host : String, statsd_port : Int32)
       host = resolve(statsd_host, statsd_port)
       @client = Statsd::Client.new(host, statsd_port)
-      log.info "Statsd sink configured at: #{statsd_host}:#{statsd_port}"
     end
 
     def increment(metric_name, sample_rate = nil, tags = nil)
