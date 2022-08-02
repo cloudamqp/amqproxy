@@ -1,6 +1,5 @@
 require "socket"
 require "openssl"
-require "uri"
 require "./client"
 
 module AMQProxy

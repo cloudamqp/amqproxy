@@ -4,9 +4,7 @@ require "./version"
 
 module AMQProxy
   struct Client
-    @closed = false
-
-    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
+    def initialize(@socket : TCPSocket)
     end
 
     def read_loop(upstream : Upstream)
@@ -31,11 +29,10 @@ module AMQProxy
     rescue ex : Upstream::WriteError
       upstream_disconnected
     rescue ex : IO::EOFError
-      raise Error.new("Client disconnected", ex) unless @closed
+      raise Error.new("Client disconnected", ex) unless @socket.closed?
     rescue ex
       raise ReadError.new "Client read error", ex
     ensure
-      @closed = true
       @socket.close rescue nil
     end
 
@@ -47,10 +44,9 @@ module AMQProxy
       socket.flush
       case frame
       when AMQ::Protocol::Frame::Connection::CloseOk
-        @closed = true
         socket.close
       end
-    rescue ex : Socket::Error | OpenSSL::SSL::Error
+    rescue ex : Socket::Error
       raise WriteError.new "Error writing to client", ex
     end
 
@@ -68,7 +64,6 @@ module AMQProxy
     end
 
     def close_socket
-      @closed = true
       @socket.close rescue nil
     end
 
