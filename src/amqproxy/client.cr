@@ -79,7 +79,7 @@ module AMQProxy
       end
 
       props = AMQ::Protocol::Table.new({
-        product:      "amqproxy",
+        product:      "AMQProxy",
         version:      VERSION,
         capabilities: {
           consumer_priorities:          true,
