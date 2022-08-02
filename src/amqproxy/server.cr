@@ -7,22 +7,8 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    def initialize(upstream_host, upstream_port, upstream_tls, metrics_client : MetricsClient, log_level = Logger::INFO, idle_connection_timeout = 5)
-      @log = Logger.new(STDOUT)
-      @log.level = log_level
-      journald =
-        {% if flag?(:unix) %}
-          if journal_stream = ENV.fetch("JOURNAL_STREAM", nil)
-            stdout_stat = STDOUT.info.@stat
-            journal_stream == "#{stdout_stat.st_dev}:#{stdout_stat.st_ino}"
-          end
-        {% else %}
-          false
-        {% end %}
-      @log.formatter = Logger::Formatter.new do |_severity, datetime, _progname, message, io|
-        io << datetime << ": " unless journald
-        io << message
-      end
+    def initialize(upstream_host, upstream_port, upstream_tls, metrics_client : MetricsClient, logger : Logger, idle_connection_timeout = 5)
+      @log = logger
       @clients = Array(Client).new
       @metrics_client = metrics_client
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout, @metrics_client)
