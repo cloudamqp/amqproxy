@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2022-08-02
+
+- Inform clients of product and version via Start frame
+- Check upstream connection before lending it out
+- Graceful shutdown, waiting for connections to close
+- Don't try to reuse channels closed by server for new connections
+- Notify upstream that consumer cancellation is supported
+- Reuse a single TLS context for all upstream TLS connections, saves memory
+- Fixed broken OpenSSL in the Docker image
+
 ## [0.6.1] - 2022-07-14
 
 - Build package for Debian 11 (bullseye) ([#73](https://github.com/cloudamqp/amqproxy/issues/73))
