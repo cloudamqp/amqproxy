@@ -7,7 +7,7 @@ module AMQProxy
     property last_used = Time.monotonic
     setter current_client : Client?
 
-    def initialize(@host : String, @port : Int32, @tls : Bool, @log : Logger)
+    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @log : Logger)
       @socket = uninitialized IO
       @open_channels = Set(UInt16).new
       @unsafe_channels = Set(UInt16).new
@@ -22,8 +22,8 @@ module AMQProxy
       tcp_socket.tcp_keepalive_count = 3
       tcp_socket.tcp_keepalive_interval = 10
       @socket =
-        if @tls
-          OpenSSL::SSL::Socket::Client.new(tcp_socket, hostname: @host).tap do |c|
+        if tls_ctx = @tls_ctx
+          OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host).tap do |c|
             c.sync_close = true
           end
         else
