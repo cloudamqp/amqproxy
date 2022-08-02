@@ -1,11 +1,10 @@
 require "socket"
 require "amq-protocol"
+require "./version"
 
 module AMQProxy
   struct Client
-    @closed = false
-
-    def initialize(@socket : (TCPSocket | OpenSSL::SSL::Socket::Server))
+    def initialize(@socket : TCPSocket)
     end
 
     def read_loop(upstream : Upstream)
@@ -30,11 +29,10 @@ module AMQProxy
     rescue ex : Upstream::WriteError
       upstream_disconnected
     rescue ex : IO::EOFError
-      raise Error.new("Client disconnected", ex) unless @closed
+      raise Error.new("Client disconnected", ex) unless @socket.closed?
     rescue ex
       raise ReadError.new "Client read error", ex
     ensure
-      @closed = true
       @socket.close rescue nil
     end
 
@@ -46,10 +44,9 @@ module AMQProxy
       socket.flush
       case frame
       when AMQ::Protocol::Frame::Connection::CloseOk
-        @closed = true
         socket.close
       end
-    rescue ex : Socket::Error | OpenSSL::SSL::Error
+    rescue ex : Socket::Error
       raise WriteError.new "Error writing to client", ex
     end
 
@@ -67,7 +64,6 @@ module AMQProxy
     end
 
     def close_socket
-      @closed = true
       @socket.close rescue nil
     end
 
@@ -82,7 +78,22 @@ module AMQProxy
         raise IO::EOFError.new("Invalid protocol start")
       end
 
-      start = AMQ::Protocol::Frame::Connection::Start.new
+      props = AMQ::Protocol::Table.new({
+        product:      "AMQProxy",
+        version:      VERSION,
+        capabilities: {
+          consumer_priorities:          true,
+          exchange_exchange_bindings:   true,
+          "connection.blocked":         true,
+          authentication_failure_close: true,
+          per_consumer_qos:             true,
+          "basic.nack":                 true,
+          direct_reply_to:              true,
+          publisher_confirms:           true,
+          consumer_cancel_notify:       true,
+        },
+      })
+      start = AMQ::Protocol::Frame::Connection::Start.new(server_properties: props)
       start.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 

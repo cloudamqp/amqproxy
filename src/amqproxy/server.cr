@@ -1,5 +1,4 @@
 require "socket"
-require "openssl"
 require "logger"
 require "amq-protocol"
 require "./pool"
@@ -8,10 +7,22 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    @running = true
-
     def initialize(upstream_host, upstream_port, upstream_tls, metrics_client : MetricsClient, logger : Logger, idle_connection_timeout = 5)
-      @log = logger
+      @log = Logger.new(STDOUT)
+      @log.level = log_level
+      journald =
+        {% if flag?(:unix) %}
+          if journal_stream = ENV.fetch("JOURNAL_STREAM", nil)
+            stdout_stat = STDOUT.info.@stat
+            journal_stream == "#{stdout_stat.st_dev}:#{stdout_stat.st_ino}"
+          end
+        {% else %}
+          false
+        {% end %}
+      @log.formatter = Logger::Formatter.new do |_severity, datetime, _progname, message, io|
+        io << datetime << ": " unless journald
+        io << message
+      end
       @clients = Array(Client).new
       @metrics_client = metrics_client
       @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout, @metrics_client)
@@ -29,45 +40,21 @@ module AMQProxy
     def listen(address, port)
       @socket = socket = TCPServer.new(address, port)
       @log.info "Proxy listening on #{socket.local_address}"
-      while @running
-        if client = socket.accept?
-          addr = client.remote_address
-          spawn handle_connection(client, addr), name: "handle connection #{addr}"
-        else
-          break
-        end
+      while client = socket.accept?
+        addr = client.remote_address
+        spawn handle_connection(client, addr), name: "handle connection #{addr}"
       end
       @log.info "Proxy stopping accepting connections"
     end
 
-    def listen_tls(address, port, cert_path : String, key_path : String)
-      @socket = socket = TCPServer.new(address, port)
-      context = OpenSSL::SSL::Context::Server.new
-      context.private_key = key_path
-      context.certificate_chain = cert_path
-      @log.info "Proxy listening on #{socket.local_address}:#{port} (TLS)"
-      while @running
-        if client = socket.accept?
-          begin
-            addr = client.remote_address
-            ssl_client = OpenSSL::SSL::Socket::Server.new(client, context)
-            ssl_client.sync_close = true
-            spawn handle_connection(ssl_client, addr), name: "handle connection #{addr} (tls)"
-          rescue e : OpenSSL::SSL::Error
-            @log.error "Error accepting OpenSSL connection from #{client.remote_address}: #{e.inspect}"
-          end
-        else
-          break
-        end
-      end
-      @log.info "Proxy stopping accepting connections"
-    end
-
-    def close
-      @running = false
+    def stop_accepting_clients
       @socket.try &.close
-      @clients.each &.close
-      @pool.try &.close
+    end
+
+    def disconnect_clients
+      @clients.each &.close        # send Connection#Close frames
+      sleep 1                      # wait for clients to disconnect voluntarily
+      @clients.each &.close_socket # close sockets forcefully
     end
 
     private def handle_connection(socket, remote_address)

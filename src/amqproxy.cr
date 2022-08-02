@@ -103,14 +103,24 @@ class AMQProxy::CLI
     metrics_client = @statsd_host.empty? ? AMQProxy::DummyMetricsClient.new : AMQProxy::StatsdClient.new(logger, @statsd_host, @statsd_port)
     server = AMQProxy::Server.new(u.host || "", port, tls, metrics_client, logger, @idle_connection_timeout)
 
+    first_shutdown = true
     shutdown = ->(_s : Signal) do
-      server.close
-      exit 0
+      if first_shutdown
+        first_shutdown = false
+        server.stop_accepting_clients
+      else
+        server.disconnect_clients
+      end
     end
     Signal::INT.trap &shutdown
     Signal::TERM.trap &shutdown
 
     server.listen(@listen_address, @listen_port.to_i)
+
+    # wait until all client connections are closed
+    until server.client_connections.zero?
+      sleep 0.2
+    end
   end
 end
 

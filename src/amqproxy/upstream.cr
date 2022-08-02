@@ -1,6 +1,5 @@
 require "socket"
 require "openssl"
-require "uri"
 require "./client"
 
 module AMQProxy
@@ -45,7 +44,8 @@ module AMQProxy
           case frame
           when AMQ::Protocol::Frame::Channel::OpenOk
             @open_channels.add(frame.channel)
-          when AMQ::Protocol::Frame::Channel::CloseOk
+          when AMQ::Protocol::Frame::Channel::Close,
+               AMQ::Protocol::Frame::Channel::CloseOk
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
           when AMQ::Protocol::Frame::Connection::CloseOk
@@ -91,7 +91,7 @@ module AMQProxy
       @socket.close unless @socket.closed?
     end
 
-    SAFE_BASIC_METHODS = {40, 10}
+    SAFE_BASIC_METHODS = {40, 10} # qos and publish
 
     # Send frames to upstream (often from the client)
     def write(frame : AMQ::Protocol::Frame)
@@ -159,18 +159,20 @@ module AMQProxy
       AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
 
       props = AMQ::Protocol::Table.new({
-        "product"      => "AMQProxy",
-        "version"      => AMQProxy::VERSION,
-        "capabilities" => {
-          "authentication_failure_close" => true,
-          "consumer_cancel_notify"       => false,
-          "publisher_confirms"           => true,
-          "exchange_exchange_bindings"   => true,
-          "basic.nack"                   => true,
-          "per_consumer_qos"             => true,
-          "connection.blocked"           => true,
-        } of String => AMQ::Protocol::Field,
-      } of String => AMQ::Protocol::Field)
+        product:      "AMQProxy",
+        version:      VERSION,
+        capabilities: {
+          consumer_priorities:          true,
+          exchange_exchange_bindings:   true,
+          "connection.blocked":         true,
+          authentication_failure_close: true,
+          per_consumer_qos:             true,
+          "basic.nack":                 true,
+          direct_reply_to:              true,
+          publisher_confirms:           true,
+          consumer_cancel_notify:       true,
+        },
+      })
       start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(response: "\u0000#{user}\u0000#{password}",
         client_properties: props, mechanism: "PLAIN", locale: "en_US")
       start_ok.to_io @socket, IO::ByteFormat::NetworkEndian
