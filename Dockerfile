@@ -3,11 +3,11 @@ WORKDIR /tmp
 COPY shard.yml shard.lock ./
 RUN shards install --production
 COPY src/ src/
-RUN shards build --release --production --static
+RUN shards build --production --release
 
 FROM alpine:latest
-RUN apk add --no-cache libcrypto3
-COPY --from=builder /tmp/bin/amqproxy /amqproxy
+RUN apk add --no-cache libssl3 pcre libevent libgcc
+COPY --from=builder /tmp/bin/amqproxy /usr/bin/amqproxy
 USER 2:2
 EXPOSE 5673
-ENTRYPOINT ["/amqproxy", "--listen=0.0.0.0"]
+ENTRYPOINT ["/usr/bin/amqproxy", "--listen=0.0.0.0"]
