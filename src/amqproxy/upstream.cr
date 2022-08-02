@@ -44,7 +44,8 @@ module AMQProxy
           case frame
           when AMQ::Protocol::Frame::Channel::OpenOk
             @open_channels.add(frame.channel)
-          when AMQ::Protocol::Frame::Channel::CloseOk
+          when AMQ::Protocol::Frame::Channel::Close,
+               AMQ::Protocol::Frame::Channel::CloseOk
             @open_channels.delete(frame.channel)
             @unsafe_channels.delete(frame.channel)
           when AMQ::Protocol::Frame::Connection::CloseOk
