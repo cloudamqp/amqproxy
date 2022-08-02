@@ -1,5 +1,6 @@
 require "socket"
 require "amq-protocol"
+require "./version"
 
 module AMQProxy
   struct Client
@@ -82,7 +83,22 @@ module AMQProxy
         raise IO::EOFError.new("Invalid protocol start")
       end
 
-      start = AMQ::Protocol::Frame::Connection::Start.new
+      props = AMQ::Protocol::Table.new({
+        product:      "amqproxy",
+        version:      VERSION,
+        capabilities: {
+          consumer_priorities:          true,
+          exchange_exchange_bindings:   true,
+          "connection.blocked":         true,
+          authentication_failure_close: true,
+          per_consumer_qos:             true,
+          "basic.nack":                 true,
+          direct_reply_to:              true,
+          publisher_confirms:           true,
+          consumer_cancel_notify:       true,
+        },
+      })
+      start = AMQ::Protocol::Frame::Connection::Start.new(server_properties: props)
       start.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
