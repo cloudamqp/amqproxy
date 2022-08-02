@@ -57,12 +57,18 @@ class AMQProxy::CLI
       parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
         @listen_address = v
       end
-      parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| @listen_port = v.to_i }
+      parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") do |v|
+        @listen_port = v.to_i
+      end
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
       end
-      parser.on("--statsd-host=STATSD_HOST", "StatsD host to send metrics to (default disabled)") { |p| @statsd_host = p }
-      parser.on("--statsd-port=STATSD_PORT", "StatsD port to send metrics to (default is 8125)") { |p| @statsd_port = p.to_i }
+      parser.on("--statsd-host=STATSD_HOST", "StatsD host to send metrics to (default disabled)") do |v|
+        @statsd_host = v
+      end
+      parser.on("--statsd-port=STATSD_PORT", "StatsD port to send metrics to (default is 8125)") do |v|
+        @statsd_port = v.to_i
+      end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = Logger::DEBUG }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
