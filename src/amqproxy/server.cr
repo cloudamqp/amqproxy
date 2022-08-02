@@ -7,7 +7,7 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    def initialize(upstream_host, upstream_port, upstream_tls, metrics_client : MetricsClient, logger : Logger, idle_connection_timeout = 5)
+    def initialize(upstream_host, upstream_port, upstream_tls, metrics_client : MetricsClient, log_level = Logger::INFO, idle_connection_timeout = 5)
       @log = Logger.new(STDOUT)
       @log.level = log_level
       journald =
