@@ -1,5 +1,4 @@
 require "socket"
-require "openssl"
 require "logger"
 require "amq-protocol"
 require "./pool"
