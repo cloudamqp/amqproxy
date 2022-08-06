@@ -10,7 +10,6 @@ Only "safe" channels are reused, that is channels where only Basic Publish or Ba
 
 In our benchmarks publishing one message per connection to a server (using TLS) with a round-trip latency of 50ms, takes on avarage 0.01s using the proxy and 0.50s without. You can read more about the proxy here [Maintaining long-lived connections with AMQProxy](https://www.cloudamqp.com/blog/2019-05-29-maintaining-long-lived-connections-with-AMQProxy.html)
 
-
 ## Installation
 
 ### Debian/Ubuntu
@@ -32,6 +31,8 @@ Docker images are published at [Docker Hub](https://hub.docker.com/r/cloudamqp/a
 ```sh
 docker run --rm -it -p 5673:5673 cloudamqp/amqproxy amqp://SERVER:5672
 ```
+
+Note: If you are running the upstream server on localhost then you will have to add the `--network host` flag to the docker run command.
 
 Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
 
