@@ -9,7 +9,7 @@ class AMQProxy::CLI
   @listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @log_level : Logger::Severity = Logger::INFO
-  @idle_connection_timeout = 5
+  @idle_connection_timeout = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
   @upstream = ENV["AMQP_URL"]?
 
   def parse_config(path)
