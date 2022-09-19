@@ -7,10 +7,8 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/amqproxy -p 5673 amqp://127.0.0.1:5672
 Restart=on-failure
-User=nobody
-Group=nogroup
-LimitNOFILE=8192
-ProtectSystem=full
+DynamicUser=yes
+LimitNOFILE=infinity
 
 [Install]
 WantedBy=multi-user.target
