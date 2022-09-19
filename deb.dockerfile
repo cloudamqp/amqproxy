@@ -1,4 +1,5 @@
-FROM 84codes/crystal:latest-debian-11 AS builder
+ARG image=84codes/crystal:latest-debian-11
+FROM $image AS builder
 RUN apt-get update && \
     env DEBIAN_FRONTEND=noninteractive apt-get install -y dpkg help2man lintian
 WORKDIR /tmp/amqproxy
