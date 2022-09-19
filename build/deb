@@ -47,7 +47,7 @@ Homepage: https://github.com/cloudamqp/amqproxy
 Section: net
 Priority: optional
 Architecture: ${architecture}
-Depends: $(ldd debroot/usr/bin/* | awk '/=>/ {print $3}' | xargs dpkg -S | awk -F: "/$architecture/ { print \$1 }" | sort -u | paste -sd,)
+Depends: $(ldd debroot/usr/bin/* | awk '/=>/ {print $1}' | xargs dpkg -S | awk -F: "/$architecture/ { print \$1 }" | sort -u | paste -sd,)
 Installed-Size: $(du -ks debroot/usr | cut -f 1)
 Maintainer: CloudAMQP Team <contact@cloudamqp.com>
 Description: connection pool for AMQP connections
