@@ -15,27 +15,29 @@ module AMQProxy
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
-    def borrow(user : String, password : String, vhost : String, &block : Upstream -> _)
+    def borrow(user : String, password : String, vhost : String, client : Client, &block : Upstream -> _)
       u = @lock.synchronize do
         c = @pools[{user, password, vhost}].pop?
         if c.nil? || c.closed?
-          @size += 1
           c = Upstream.new(@host, @port, @tls_ctx, @log).connect(user, password, vhost)
+          @size += 1
         end
+        c.current_client = client
         c
       end
 
       yield u
     ensure
-      if u.nil?
-        @size -= 1
-        @log.error "Upstream connection could not be established"
-      elsif u.closed?
-        @size -= 1
-        @log.error "Upstream connection closed when returned"
-      else
-        u.last_used = Time.monotonic
-        @lock.synchronize do
+      @lock.synchronize do
+        if u.nil?
+          @size -= 1
+          @log.error "Upstream connection could not be established"
+        elsif u.closed?
+          @size -= 1
+          @log.error "Upstream connection closed when returned"
+        else
+          u.client_disconnected
+          u.last_used = Time.monotonic
           @pools[{user, password, vhost}].push u
         end
       end

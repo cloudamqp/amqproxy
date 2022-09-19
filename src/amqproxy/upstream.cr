@@ -6,14 +6,11 @@ module AMQProxy
   class Upstream
     property last_used = Time.monotonic
     setter current_client : Client?
+    @socket : IO
+    @open_channels = Set(UInt16).new
+    @unsafe_channels = Set(UInt16).new
 
     def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @log : Logger)
-      @socket = uninitialized IO
-      @open_channels = Set(UInt16).new
-      @unsafe_channels = Set(UInt16).new
-    end
-
-    def connect(user : String, password : String, vhost : String)
       tcp_socket = TCPSocket.new(@host, @port)
       tcp_socket.sync = false
       tcp_socket.keepalive = true
@@ -28,6 +25,9 @@ module AMQProxy
         else
           tcp_socket
         end
+    end
+
+    def connect(user : String, password : String, vhost : String)
       start(user, password, vhost)
       spawn read_loop, name: "upstream read loop #{@host}:#{@port}"
       self
@@ -58,14 +58,8 @@ module AMQProxy
               client.write(frame)
             rescue ex
               @log.error "#{frame.inspect} could not be sent to client: #{ex.inspect}"
-              @current_client = nil # don't try to write to this client again
-              client.close_socket   # close the socket of the client so that the client's read_loop exits
-              # If a body frame was written you can't be sure how far it got
-              # The only safe thing is to close the upstream connection
-              if frame.is_a? AMQ::Protocol::Frame::Body
-                close("Proxy client disconnected while writing to it")
-                next
-              end
+              client.close_socket # close the socket of the client so that the client's read_loop exits
+              client_disconnected
             end
           elsif !frame.is_a? AMQ::Protocol::Frame::Channel::CloseOk
             @log.error "Receiving #{frame.inspect} but no client to delivery to"
@@ -140,6 +134,7 @@ module AMQProxy
     end
 
     def client_disconnected
+      @current_client = nil
       return if closed?
       @open_channels.each do |ch|
         if @unsafe_channels.includes? ch
