@@ -1,0 +1,15 @@
+FROM 84codes/crystal:latest-debian-11 AS builder
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive apt-get install -y dpkg help2man lintian
+WORKDIR /tmp/amqproxy
+COPY README.md shard.yml shard.lock ./
+RUN shards install --production
+COPY src/ src/
+RUN shards build --production --release && strip bin/*
+
+COPY extras/amqproxy.service extras/amqproxy.service
+COPY build/deb build/deb
+RUN build/deb $(shards version) 1
+
+FROM scratch
+COPY --from=builder /tmp/amqproxy/builds .

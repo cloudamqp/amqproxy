@@ -1,34 +1,29 @@
 #!/bin/bash
 set -eu
-which dpkg-deb > /dev/null || (echo "dpkg-deb required"; exit 1)
-which fakeroot > /dev/null || (echo "fakeroot required"; exit 1)
 which help2man > /dev/null || (echo "help2man required"; exit 1)
 pkg_version=${1:-$(shards version)}
 pkg_revision=${2:-1}
+architecture=$(dpkg --print-architecture)
 . /etc/os-release
-root=builds/debian/$VERSION_CODENAME/amqproxy_${pkg_version}-${pkg_revision}_$(dpkg --print-architecture)
 
-shards build --release --production
-
-rm -rf $root
-mkdir -p $root/DEBIAN
-mkdir -p $root/usr/bin
-mkdir -p $root/lib/systemd/system
-mkdir -p $root/usr/share/doc/amqproxy
-mkdir -p $root/usr/share/man/man1
-cp bin/amqproxy $root/usr/bin
-#strip --strip-unneeded --remove-section=.comment --remove-section=.note $root/usr/bin/*
-cp extras/amqproxy.service $root/lib/systemd/system
-cp README.md $root/usr/share/doc/amqproxy/README
-cat > $root/usr/share/doc/amqproxy/changelog.Debian << EOF
+mkdir -p debroot/DEBIAN
+mkdir -p debroot/usr/bin
+mkdir -p debroot/lib/systemd/system
+mkdir -p debroot/usr/share/doc/amqproxy
+mkdir -p debroot/usr/share/man/man1
+cp bin/amqproxy debroot/usr/bin
+#strip --strip-unneeded --remove-section=.comment --remove-section=.note debroot/usr/bin/*
+cp extras/amqproxy.service debroot/lib/systemd/system
+cp README.md debroot/usr/share/doc/amqproxy/README
+cat > debroot/usr/share/doc/amqproxy/changelog.Debian << EOF
 amqproxy ($pkg_version-$pkg_revision) whatever; urgency=medium
 
   * New upstream release.
 
  -- CloudAMQP Team <contact@cloudamqp.com>  Wed, 17 Apr 2019 18:01:24 +0000
 EOF
-gzip -9 -n $root/usr/share/doc/amqproxy/changelog.Debian
-cat > $root/usr/share/doc/amqproxy/copyright << EOF
+gzip -9 -n debroot/usr/share/doc/amqproxy/changelog.Debian
+cat > debroot/usr/share/doc/amqproxy/copyright << EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: AMQProxy
 Upstream-Contact: support@cloudamqp.com
@@ -38,43 +33,49 @@ Files: *
 Copyright: 2019, 84codes AB
 License: MIT
 EOF
-help2man -Nn "connection pool for AMQP connections" bin/amqproxy > $root/usr/share/man/man1/amqproxy.1
-gzip -9 -n $root/usr/share/man/man1/amqproxy.1
+help2man -Nn "connection pool for AMQP connections" bin/amqproxy > debroot/usr/share/man/man1/amqproxy.1
+gzip -9 -n debroot/usr/share/man/man1/amqproxy.1
 
-cd $root
+cd debroot
 find . -type f -not -path "./DEBIAN/*" | xargs md5sum > DEBIAN/md5sums
 cd - > /dev/null
 
-cat > $root/DEBIAN/control << EOF
+cat > debroot/DEBIAN/control << EOF
 Package: amqproxy
 Version: $pkg_version-$pkg_revision
 Homepage: https://github.com/cloudamqp/amqproxy
 Section: net
 Priority: optional
-Architecture: $(dpkg --print-architecture)
-Depends: openssl, systemd, libc6
-Installed-Size: $(du -ks $root/usr | cut -f 1)
+Architecture: ${architecture}
+Depends: $(ldd debroot/usr/bin/* | awk '/=>/ {print $3}' | xargs dpkg -S | awk -F: "/$architecture/ { print \$1 }" | sort -u | paste -sd,)
+Installed-Size: $(du -ks debroot/usr | cut -f 1)
 Maintainer: CloudAMQP Team <contact@cloudamqp.com>
 Description: connection pool for AMQP connections
  Reuses connections and channels to an upstream
  AMQP server.
 EOF
 
-cat > $root/DEBIAN/postinst << EOF
+cat > debroot/DEBIAN/postinst << EOF
 #!/bin/sh -e
 deb-systemd-helper enable amqproxy.service
 deb-systemd-invoke start amqproxy.service
 EOF
-chmod +x $root/DEBIAN/postinst
+chmod +x debroot/DEBIAN/postinst
 
-cat > $root/DEBIAN/prerm << EOF
+cat > debroot/DEBIAN/prerm << EOF
 #!/bin/sh -e
 deb-systemd-invoke stop amqproxy.service
 deb-systemd-helper purge amqproxy.service
 EOF
-chmod +x $root/DEBIAN/prerm
+chmod +x debroot/DEBIAN/prerm
 
-fakeroot dpkg-deb --build $root
-rm -r $root
+debdir=builds/$ID/$VERSION_CODENAME
+debname=amqproxy_${pkg_version}-${pkg_revision}_${architecture}.deb
+mkdir -p "$debdir"
 
-lintian $root.deb || true
+echo 2.0 > debian-binary
+tar c --directory debroot/DEBIAN . | gzip -9 > control.tar.gz
+tar c --directory debroot --exclude=./DEBIAN . | gzip -9 > data.tar.gz
+ar rc "$debdir/$debname" debian-binary control.tar.gz data.tar.gz
+
+lintian "$debdir/$debname" || true
