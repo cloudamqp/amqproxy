@@ -19,7 +19,7 @@ jobs:
       - name: Build
         run:  build/tar 1
       - name: Upload github artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           path: '*.tar.gz'
           name: tar
@@ -64,3 +64,9 @@ jobs:
           curl -XPOST https://packagecloud.io/api/v1/repos/cloudamqp/amqproxy/packages.json \
             -F "package[distro_version_id]=${dist_id}" \
             -F "package[package_file]=@${debfile}"
+
+      - name: Upload github artifact
+        uses: actions/upload-artifact@v3
+        with:
+          path: 'builds/**/*.deb'
+          name: debs
