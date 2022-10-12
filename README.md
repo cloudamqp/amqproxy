@@ -74,6 +74,7 @@ There are three ways to configure the AMQProxy.
     * `--help` / `-h`: Shows help
     * `--version` / `-v`: Displays AMQProxy version
 * Config file
+  * You can find an example at [config/example.ini](config/example.ini)
 
 #### Precedence
 1. Config file
