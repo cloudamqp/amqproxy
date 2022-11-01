@@ -3,11 +3,11 @@ name: Docker images
 on:
   push:
     branches:
-      - master
+      - main
     tags:
-      - 'v*'
+      - "v*"
     paths:
-      - 'src/**'
+      - "src/**"
       - shard.lock
       - Dockerfile
       - .github/workflows/docker.yml

@@ -6,7 +6,7 @@ root=~/rpmbuild
 
 mkdir -p $root/{RPMS,SRPMS,SOURCES,SPECS,tmp}
 
-git archive --format=tar.gz -o $root/SOURCES/amqproxy.tar.gz --prefix=amqproxy-$pkg_version/ master
+git archive --format=tar.gz -o $root/SOURCES/amqproxy.tar.gz --prefix=amqproxy-$pkg_version/ main
 
 cat > $root/SPECS/amqproxy.spec << EOF
 Name:    amqproxy

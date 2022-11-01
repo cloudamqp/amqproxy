@@ -2,11 +2,11 @@ name: Build packages
 on:
   push:
     branches:
-      - master
+      - main
     tags:
-      - 'v*'
+      - "v*"
     paths-ignore:
-      - 'spec/**'
+      - "spec/**"
 
 jobs:
   tar:
@@ -18,19 +18,20 @@ jobs:
       - name: Install Dependencies
         run: shards install --production
       - name: Build
-        run:  build/tar 1
+        run: build/tar 1
       - name: Upload github artifact
         uses: actions/upload-artifact@v3
         with:
-          path: '*.tar.gz'
+          path: "*.tar.gz"
           name: tar
 
   deb:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: ['ubuntu-focal', 'ubuntu-bionic', 'debian-buster', 'debian-bullseye']
-        arch: ['amd64', 'arm64']
+        os:
+          ["ubuntu-focal", "ubuntu-bionic", "debian-buster", "debian-bullseye"]
+        arch: ["amd64", "arm64"]
       fail-fast: false
     steps:
       - name: Checkout
@@ -56,7 +57,7 @@ jobs:
       - name: Upload GitHub artifact
         uses: actions/upload-artifact@v3
         with:
-          path: 'builds/**/*.deb'
+          path: "builds/**/*.deb"
           name: debs
 
       - name: Upload to PackageCloud
