@@ -25,6 +25,7 @@ module AMQProxy
         else
           tcp_socket
         end
+      @lock = Mutex.new
     end
 
     def connect(user : String, password : String, vhost : String)
@@ -88,35 +89,39 @@ module AMQProxy
 
     # Send frames to upstream (often from the client)
     def write(frame : AMQ::Protocol::Frame)
-      case frame
-      when AMQ::Protocol::Frame::Basic::Get
-        unless frame.no_ack
+      @lock.synchronize do
+        case frame
+        when AMQ::Protocol::Frame::Basic::Get
+          unless frame.no_ack
+            @unsafe_channels.add(frame.channel)
+          end
+        when AMQ::Protocol::Frame::Basic
+          unless SAFE_BASIC_METHODS.includes? frame.method_id
+            @unsafe_channels.add(frame.channel)
+          end
+        when AMQ::Protocol::Frame::Confirm
           @unsafe_channels.add(frame.channel)
-        end
-      when AMQ::Protocol::Frame::Basic
-        unless SAFE_BASIC_METHODS.includes? frame.method_id
+        when AMQ::Protocol::Frame::Tx
           @unsafe_channels.add(frame.channel)
+        when AMQ::Protocol::Frame::Connection::Close
+          return AMQ::Protocol::Frame::Connection::CloseOk.new
+        when AMQ::Protocol::Frame::Channel::Open
+          if @open_channels.includes? frame.channel
+            return AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+          end
+        when AMQ::Protocol::Frame::Channel::Close
+          unless @unsafe_channels.includes? frame.channel
+            return AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+          end
         end
-      when AMQ::Protocol::Frame::Confirm
-        @unsafe_channels.add(frame.channel)
-      when AMQ::Protocol::Frame::Tx
-        @unsafe_channels.add(frame.channel)
-      when AMQ::Protocol::Frame::Connection::Close
-        return AMQ::Protocol::Frame::Connection::CloseOk.new
-      when AMQ::Protocol::Frame::Channel::Open
-        if @open_channels.includes? frame.channel
-          return AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
-        end
-      when AMQ::Protocol::Frame::Channel::Close
-        unless @unsafe_channels.includes? frame.channel
-          return AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-        end
+        @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
+        @socket.flush
+        nil
       end
-      @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
-      @socket.flush
-      nil
     rescue ex : IO::Error | OpenSSL::SSL::Error
-      @socket.close
+      @lock.synchronize do
+        @socket.close
+      end
       raise WriteError.new "Error writing to upstream", ex
     end
 

@@ -5,6 +5,7 @@ require "./version"
 module AMQProxy
   struct Client
     def initialize(@socket : TCPSocket)
+      @lock = Mutex.new
     end
 
     def read_loop(upstream : Upstream)
@@ -38,13 +39,15 @@ module AMQProxy
 
     # Send frame to client
     def write(frame : AMQ::Protocol::Frame)
-      socket = @socket
-      return if socket.closed?
-      frame.to_io(socket, IO::ByteFormat::NetworkEndian)
-      socket.flush
-      case frame
-      when AMQ::Protocol::Frame::Connection::CloseOk
-        socket.close
+      @lock.synchronize do
+        socket = @socket
+        return if socket.closed?
+        frame.to_io(socket, IO::ByteFormat::NetworkEndian)
+        socket.flush
+        case frame
+        when AMQ::Protocol::Frame::Connection::CloseOk
+          socket.close
+        end
       end
     rescue ex : Socket::Error
       raise WriteError.new "Error writing to client", ex
