@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2022-11-15
+
+- Prevent race conditions by using more locks
+- Don't disable nagles algorithm (TCP no delay), connections are faster with the algorithm enabled
+- idle_connection_timeout can be specificed as an environment variable
+- Container image uses libssl1.1 (from libssl3 which isn't fully supported)
+
 ## [0.7.0] - 2022-08-02
 
 - Inform clients of product and version via Start frame
