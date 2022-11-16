@@ -29,9 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os:
-          ["ubuntu-focal", "ubuntu-bionic", "debian-buster", "debian-bullseye"]
-        arch: ["amd64", "arm64"]
+        os: ["ubuntu-focal", "ubuntu-bionic", "debian-buster", "debian-bullseye"]
       fail-fast: false
     steps:
       - name: Checkout
@@ -46,10 +44,10 @@ jobs:
       - name: Build deb package
         uses: docker/build-push-action@v3
         with:
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=deb-${{ matrix.os }}
+          cache-to: type=gha,mode=max,scope=deb-${{ matrix.os }}
           file: deb.dockerfile
-          platforms: ${{ matrix.arch }}
+          platforms: linux/amd64,linux/arm64
           build-args: |
             image=84codes/crystal:latest-${{ matrix.os }}
           outputs: builds
@@ -63,16 +61,15 @@ jobs:
       - name: Upload to PackageCloud
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          cat > ~/.curlrc << EOF
-          fail
-          silent
-          show-error
-          user ${{ secrets.PACKAGECLOUD_TOKEN }}:
-          EOF
-          . /etc/os-release
-          curl -O https://packagecloud.io/api/v1/distributions.json
-          dist_id=$(jq ".deb[] | select(.index_name == \"${ID}\").versions[] | select(.index_name == \"${VERSION_CODENAME}\").id" distributions.json)
-          debfile=$(find builds -name '*.deb' | tail -1)
-          curl -XPOST https://packagecloud.io/api/v1/repos/cloudamqp/amqproxy/packages.json \
-            -F "package[distro_version_id]=${dist_id}" \
-            -F "package[package_file]=@${debfile}"
+          set -eux
+          curl -fsSO -u "${{ secrets.PACKAGECLOUD_TOKEN }}:" https://packagecloud.io/api/v1/distributions.json
+          for PKG_FILE in $(find builds -name "*.deb")
+          do
+            ID=$(echo $PKG_FILE | cut -d/ -f2)
+            VERSION_CODENAME=$(echo $PKG_FILE | cut -d/ -f3)
+            DIST_ID=$(jq ".deb[] | select(.index_name == \"${ID}\").versions[] | select(.index_name == \"${VERSION_CODENAME}\").id" distributions.json)
+            curl -fsS -u "${{ secrets.PACKAGECLOUD_TOKEN }}:" -XPOST \
+              -F "package[distro_version_id]=${DIST_ID}" \
+              -F "package[package_file]=@${PKG_FILE}" \
+              https://packagecloud.io/api/v1/repos/${{ github.repository }}/packages.json
+           done
