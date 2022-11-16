@@ -153,9 +153,10 @@ module AMQProxy
       AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian) { |f| f.as(AMQ::Protocol::Frame::Connection::Start) }
 
       props = AMQ::Protocol::Table.new({
-        product:      "AMQProxy",
-        version:      VERSION,
-        capabilities: {
+        connection_name: "AMQProxy #{VERSION}",
+        product:         "AMQProxy",
+        version:         VERSION,
+        capabilities:    {
           consumer_priorities:          true,
           exchange_exchange_bindings:   true,
           "connection.blocked":         true,
