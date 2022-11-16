@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2022-11-16
+
+- New amq-protocol.cr without a StringPool, which in many cases caused a memory leak
+
 ## [0.8.0] - 2022-11-15
 
 - Prevent race conditions by using more locks
