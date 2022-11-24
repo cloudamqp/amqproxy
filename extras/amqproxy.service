@@ -5,7 +5,7 @@ Requires=network.target
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/amqproxy -p 5673 amqp://127.0.0.1:5672
+ExecStart=/usr/bin/amqproxy --config /etc/amqproxy.ini
 Restart=on-failure
 DynamicUser=yes
 LimitNOFILE=infinity
