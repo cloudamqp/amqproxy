@@ -11,12 +11,12 @@ mkdir -p debroot/usr/bin
 mkdir -p debroot/lib/systemd/system
 mkdir -p debroot/usr/share/doc/amqproxy
 mkdir -p debroot/usr/share/man/man1
+mkdir -p debroot/etc
 cp bin/amqproxy debroot/usr/bin
 #strip --strip-unneeded --remove-section=.comment --remove-section=.note debroot/usr/bin/*
 cp extras/amqproxy.service debroot/lib/systemd/system
 cp config/example.ini debroot/etc/amqproxy.ini
 cp README.md debroot/usr/share/doc/amqproxy/README
-cp CHANGELOG.md debroot/usr/share/doc/amqproxy/changelog
 cat > debroot/usr/share/doc/amqproxy/changelog.Debian << EOF
 amqproxy ($pkg_version-$pkg_revision) whatever; urgency=medium
 
