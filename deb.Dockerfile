@@ -9,6 +9,7 @@ COPY src/ src/
 RUN shards build --production --release && strip bin/*
 
 COPY extras/amqproxy.service extras/amqproxy.service
+COPY config/example.ini config/example.ini
 COPY build/deb build/deb
 RUN build/deb $(shards version) 1
 

@@ -46,7 +46,7 @@ jobs:
         with:
           cache-from: type=gha,scope=deb-${{ matrix.os }}
           cache-to: type=gha,mode=max,scope=deb-${{ matrix.os }}
-          file: deb.dockerfile
+          file: deb.Dockerfile
           platforms: linux/amd64,linux/arm64
           build-args: |
             image=84codes/crystal:latest-${{ matrix.os }}
