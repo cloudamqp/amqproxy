@@ -9,6 +9,7 @@ module AMQProxy
     @socket : IO
     @open_channels = Set(UInt16).new
     @unsafe_channels = Set(UInt16).new
+    @lock = Mutex.new
 
     def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @log : Logger)
       tcp_socket = TCPSocket.new(@host, @port)
@@ -25,7 +26,6 @@ module AMQProxy
         else
           tcp_socket
         end
-      @lock = Mutex.new
     end
 
     def connect(user : String, password : String, vhost : String)
@@ -89,49 +89,49 @@ module AMQProxy
 
     # Send frames to upstream (often from the client)
     def write(frame : AMQ::Protocol::Frame)
-      @lock.synchronize do
-        case frame
-        when AMQ::Protocol::Frame::Basic::Get
-          unless frame.no_ack
-            @unsafe_channels.add(frame.channel)
-          end
-        when AMQ::Protocol::Frame::Basic
-          unless SAFE_BASIC_METHODS.includes? frame.method_id
-            @unsafe_channels.add(frame.channel)
-          end
-        when AMQ::Protocol::Frame::Confirm
+      case frame
+      when AMQ::Protocol::Frame::Basic::Get
+        unless frame.no_ack
           @unsafe_channels.add(frame.channel)
-        when AMQ::Protocol::Frame::Tx
-          @unsafe_channels.add(frame.channel)
-        when AMQ::Protocol::Frame::Connection::Close
-          return AMQ::Protocol::Frame::Connection::CloseOk.new
-        when AMQ::Protocol::Frame::Channel::Open
-          if @open_channels.includes? frame.channel
-            return AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
-          end
-        when AMQ::Protocol::Frame::Channel::Close
-          unless @unsafe_channels.includes? frame.channel
-            return AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-          end
         end
+      when AMQ::Protocol::Frame::Basic
+        unless SAFE_BASIC_METHODS.includes? frame.method_id
+          @unsafe_channels.add(frame.channel)
+        end
+      when AMQ::Protocol::Frame::Confirm
+        @unsafe_channels.add(frame.channel)
+      when AMQ::Protocol::Frame::Tx
+        @unsafe_channels.add(frame.channel)
+      when AMQ::Protocol::Frame::Connection::Close
+        return AMQ::Protocol::Frame::Connection::CloseOk.new
+      when AMQ::Protocol::Frame::Channel::Open
+        if @open_channels.includes? frame.channel
+          return AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+        end
+      when AMQ::Protocol::Frame::Channel::Close
+        unless @unsafe_channels.includes? frame.channel
+          return AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+        end
+      end
+      @lock.synchronize do
         @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
         @socket.flush
         nil
-      end
-    rescue ex : IO::Error | OpenSSL::SSL::Error
-      @lock.synchronize do
+      rescue ex : IO::Error | OpenSSL::SSL::Error
         @socket.close
+        raise WriteError.new "Error writing to upstream", ex
       end
-      raise WriteError.new "Error writing to upstream", ex
     end
 
     def close(reason = "")
-      close = AMQ::Protocol::Frame::Connection::Close.new(200_u16, reason, 0_u16, 0_u16)
-      close.to_io(@socket, IO::ByteFormat::NetworkEndian)
-      @socket.flush
-    rescue ex : IO::Error | OpenSSL::SSL::Error
-      @socket.close
-      raise WriteError.new "Error writing Connection#Close to upstream", ex
+      @lock.synchronize do
+        close = AMQ::Protocol::Frame::Connection::Close.new(200_u16, reason, 0_u16, 0_u16)
+        close.to_io(@socket, IO::ByteFormat::NetworkEndian)
+        @socket.flush
+      rescue ex : IO::Error | OpenSSL::SSL::Error
+        @socket.close
+        raise WriteError.new "Error writing Connection#Close to upstream", ex
+      end
     end
 
     def closed?
@@ -141,11 +141,13 @@ module AMQProxy
     def client_disconnected
       @current_client = nil
       return if closed?
-      @open_channels.each do |ch|
-        if @unsafe_channels.includes? ch
-          close = AMQ::Protocol::Frame::Channel::Close.new(ch, 200_u16, "Client disconnected", 0_u16, 0_u16)
-          close.to_io @socket, IO::ByteFormat::NetworkEndian
-          @socket.flush
+      @lock.synchronize do
+        @open_channels.each do |ch|
+          if @unsafe_channels.includes? ch
+            close = AMQ::Protocol::Frame::Channel::Close.new(ch, 200_u16, "Client disconnected", 0_u16, 0_u16)
+            close.to_io @socket, IO::ByteFormat::NetworkEndian
+            @socket.flush
+          end
         end
       end
     end

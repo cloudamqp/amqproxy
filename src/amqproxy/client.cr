@@ -4,8 +4,9 @@ require "./version"
 
 module AMQProxy
   struct Client
+    @lock = Mutex.new
+
     def initialize(@socket : TCPSocket)
-      @lock = Mutex.new
     end
 
     def read_loop(upstream : Upstream)
