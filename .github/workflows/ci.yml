@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install shards
-        run: shards install
+        run: sed -i '/ameba/d' shard.yml && shards install
 
       - name: Wait for RabbitMQ to start
         run: rabbitmqctl wait /tmp/rabbitmq.pid
