@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2022-11-26
+
 - Build RPM packages for Fedora 37
 - Build DEB packages for Ubuntu 22.04
 - Locks around socket writes
