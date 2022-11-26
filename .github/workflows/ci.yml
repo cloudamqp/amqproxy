@@ -17,10 +17,7 @@ jobs:
         run: apt-get update && apt-get install -y rabbitmq-server
 
       - name: Start RabbitMQ
-        run: RABBITMQ_PID_FILE=rabbitmq.pid rabbitmq-server &
-
-      - name: Wait for RabbitMQ to start
-        run: rabbitmqctl wait rabbitmq.pid
+        run: RABBITMQ_PID_FILE=/tmp/rabbitmq.pid rabbitmq-server -detached
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -28,8 +25,11 @@ jobs:
       - name: Install shards
         run: shards install
 
+      - name: Wait for RabbitMQ to start
+        run: rabbitmqctl wait /tmp/rabbitmq.pid
+
       - name: Run tests
-        run: crystal spec --no-color --order random
+        run: crystal spec --order random
 
   lint:
     runs-on: ubuntu-latest
