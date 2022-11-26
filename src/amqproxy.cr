@@ -58,9 +58,9 @@ class AMQProxy::CLI
     end
 
     @upstream ||= ARGV.shift?
-    abort p.to_s if @upstream.nil?
+    upstream_url = @upstream || abort p.to_s
 
-    u = URI.parse @upstream.not_nil!
+    u = URI.parse upstream_url
     abort "Invalid upstream URL" unless u.host
     default_port =
       case u.scheme
