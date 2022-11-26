@@ -5,8 +5,12 @@ on:
       - main
     tags:
       - "v*"
-    paths-ignore:
-      - "spec/**"
+    paths:
+      - .github/workflows/packages.yml
+      - deb.Dockerfile
+      - build/deb
+      - shard.lock
+      - src/**
 
 jobs:
   tar:
