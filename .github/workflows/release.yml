@@ -31,7 +31,10 @@ jobs:
           cache-from: type=gha,scope=release
           cache-to: type=gha,mode=max,scope=release
 
+      - name: List files
+        run: ls -Rl
+
       - name: Create Release
-        run: gh release create "$(git describe --abbrev=0)" ./linux/*/*.tar.gz --notes "$(./build/release_notes)"
+        run: gh release create "$(git describe --abbrev=0)" ./**/*.tar.gz --notes "$(./build/release_notes)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
