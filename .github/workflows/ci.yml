@@ -14,7 +14,13 @@ jobs:
     container: 84codes/crystal:latest-ubuntu-22.04
     steps:
       - name: Install RabbitMQ
-        run: apt-get update && apt-get install -y rabbitmq-server && rabbitmq-server & && rabbitmqctl wait
+        run: apt-get update && apt-get install -y rabbitmq-server
+
+      - name: Start RabbitMQ
+        run: rabbitmq-server &
+
+      - name: Wait for RabbitMQ to start
+        run: rabbitmqctl wait
 
       - name: Checkout
         uses: actions/checkout@v3
