@@ -6,7 +6,7 @@ WORKDIR /tmp/amqproxy
 COPY README.md shard.yml shard.lock ./
 RUN shards install --production
 COPY src/ src/
-RUN shards build --production --release && strip bin/*
+RUN shards build --production --release --debug
 
 COPY extras/amqproxy.service extras/amqproxy.service
 COPY config/example.ini config/example.ini
