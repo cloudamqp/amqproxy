@@ -1,0 +1,100 @@
+name: RPM
+on:
+  pull_request:
+    paths:
+      - .github/workflows/rpm.yml
+      - Dockerfile.rpm
+      - amqproxy.spec
+      - shard.lock
+      - src/**
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+    paths:
+      - .github/workflows/rpm.yml
+      - Dockerfile.rpm
+      - amqproxy.spec
+      - shard.lock
+      - src/**
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build_rpm:
+    name: Build RPM
+    strategy:
+      matrix:
+        os: ['fedora-37']
+    runs-on: ubuntu-latest
+    concurrency: ${{ github.workflow }}-depot
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Generate version string
+        run: |
+          last_tag=$(git describe --tags --abbrev=0)
+          version=$(cut -d- -f1 <<< ${last_tag:1})
+          pre_release=$(cut -d- -f2 <<< $last_tag)
+          if [ -n "$pre_release" ]
+          then version=$version~${pre_release//./}
+          fi
+          git_describe=$(git describe --tags)
+          post_release=${git_describe//$last_tag/}
+          post_release=${post_release:1}
+          post_release=${post_release//-/.}
+          if [ -n "$post_release" ]
+          then version=$version^${post_release}
+          fi
+          echo "version=$version" >> $GITHUB_ENV
+
+      # The depot CLI still needs to be available in your workflow
+      - uses: depot/setup-action@v1
+      - uses: depot/build-push-action@v1
+        with:
+          file: Dockerfile.rpm
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            build_image=84codes/crystal:1.6.2-${{ matrix.os }}
+            version=${{ env.version }}
+          outputs: RPMS
+
+      - uses: actions/upload-artifact@v3
+        name: Upload artifact
+        with:
+          name: rpm-packages
+          path: RPMS
+
+      - name: Upload to Packagecloud
+        run: |
+          set -eux
+          curl -fsSO -u "${{ secrets.packagecloud_token }}:" https://packagecloud.io/api/v1/distributions.json
+          ID=$(echo "${{ matrix.os }}" | cut -d- -f1)
+          VERSION_ID=$(echo "${{ matrix.os }}" | cut -d- -f2)
+          DIST_ID=$(jq ".rpm[] | select(.index_name == \"${ID}\").versions[] | select(.index_name == \"${VERSION_ID}\").id" distributions.json)
+          for PKG_FILE in $(find RPMS -name "*.rpm" | sort -u -t/ -k3)
+          do curl -fsS -u "${{ secrets.packagecloud_token }}:" -XPOST \
+                  -F "package[distro_version_id]=${DIST_ID}" \
+                  -F "package[package_file]=@${PKG_FILE}" \
+                  https://packagecloud.io/api/v1/repos/${{ github.repository }}/packages.json
+          done
+        if: startsWith(github.ref, 'refs/tags/v')
+
+      - name: Upload to Packagecloud head repo
+        run: |
+          set -eux
+          curl -fsSO -u "${{ secrets.packagecloud_token }}:" https://packagecloud.io/api/v1/distributions.json
+          ID=$(echo "${{ matrix.os }}" | cut -d- -f1)
+          VERSION_ID=$(echo "${{ matrix.os }}" | cut -d- -f2)
+          DIST_ID=$(jq ".rpm[] | select(.index_name == \"${ID}\").versions[] | select(.index_name == \"${VERSION_ID}\").id" distributions.json)
+          for PKG_FILE in $(find RPMS -name "*.rpm" | sort -u -t/ -k3)
+          do curl -fsS -u "${{ secrets.packagecloud_token }}:" -XPOST \
+                  -F "package[distro_version_id]=${DIST_ID}" \
+                  -F "package[package_file]=@${PKG_FILE}" \
+                  https://packagecloud.io/api/v1/repos/${{ github.repository }}-head/packages.json
+          done
+        if: github.event_name != 'pull_request'

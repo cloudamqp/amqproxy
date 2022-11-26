@@ -1,0 +1,29 @@
+ARG build_image=84codes/crystal:latest-fedora-37
+
+FROM $build_image AS builder
+RUN dnf install -y --nodocs --setopt=install_weak_deps=False --repo=fedora,updates \
+    rpmdevtools rpmlint systemd-rpm-macros npm make help2man
+RUN rpmdev-setuptree
+COPY amqproxy.spec /root/rpmbuild/SPECS/
+ARG version
+RUN sed -i -E "s/^(Version:).*/\1 $version/" /root/rpmbuild/SPECS/amqproxy.spec
+RUN rpmlint /root/rpmbuild/SPECS/amqproxy.spec
+WORKDIR /usr/src/amqproxy
+COPY Makefile README.md LICENSE CHANGELOG.md shard.yml shard.lock ./
+COPY extras/ extras/
+COPY config/ config/
+COPY src/ src/
+RUN sed -i -E "s/(VERSION =) .*/\1 \"$version\"/" src/amqproxy/version.cr
+RUN tar -czf /root/rpmbuild/SOURCES/amqproxy.tar.gz -C /usr/src amqproxy
+ARG MAKEFLAGS
+RUN rpmbuild -ba /root/rpmbuild/SPECS/amqproxy.spec
+RUN rpmlint /root/rpmbuild/RPMS/* || true
+
+FROM fedora:37 AS test
+COPY --from=builder /root/rpmbuild/RPMS /tmp/RPMS
+RUN find /tmp/RPMS -type f -exec dnf install -y {} \;
+RUN amqproxy --version
+
+# Copy the deb package to a scratch image, that then can be exported
+FROM scratch
+COPY --from=builder /root/rpmbuild/RPMS /root/rpmbuild/SRPMS .
