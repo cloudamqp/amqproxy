@@ -3,4 +3,4 @@ require "../src/amqproxy/server"
 require "../src/amqproxy/version"
 require "amqp-client"
 
-MAYBE_SUDO = ENV.has_key?("NO_SUDO") ? "" : "sudo "
+MAYBE_SUDO = ENV["USER"]? == "root" ? "" : "sudo "
