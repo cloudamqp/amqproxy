@@ -2,6 +2,7 @@ on:
   push:
     tags:
       - v*
+  workflow_dispatch:
 
 name: Create Release
 
@@ -11,7 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
-        run: git clone ${{ github.repositoryUrl }} .
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -27,6 +30,6 @@ jobs:
           outputs: .
 
       - name: Create Release
-        run: gh release create "${{ github.ref }}" ./*.tar.gz --notes "$(./build/release_notes)"
+        run: gh release create "$(git describe --abbrev=0)" ./*.tar.gz --notes "$(./build/release_notes)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
