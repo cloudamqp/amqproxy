@@ -64,6 +64,7 @@ module AMQProxy
     private def handle_connection(socket, remote_address)
       socket.sync = false
       socket.keepalive = true
+      socket.tcp_nodelay = true
       socket.tcp_keepalive_idle = 60
       socket.tcp_keepalive_count = 3
       socket.tcp_keepalive_interval = 10
