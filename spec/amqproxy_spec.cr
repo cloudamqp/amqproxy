@@ -122,4 +122,60 @@ describe AMQProxy::Server do
     s.upstream_connections.should eq 1
     (Time.utc.to_unix - started).should be < 30
   end
+
+  it "respects max pool connections" do
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG, max_upstream_connections: 2)
+    wait_for_channel = Channel(Int32).new # channel used to wait for certain calls, to test certain behaviour
+    spawn do
+      s.listen("127.0.0.1", 5673)
+    end
+    Fiber.yield
+    
+    spawn do
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        conn.channel
+        wait_for_channel.send(0) # send 0
+        10.times do
+          s.client_connections.should be >= 1
+          s.upstream_connections.should be >= 1
+          sleep 2
+        end
+      end
+      wait_for_channel.send(6) # send 6
+    end
+    wait_for_channel.receive.should eq 0 # wait 0
+    s.client_connections.should eq 1
+    s.upstream_connections.should eq 1
+    
+    spawn do
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        conn.channel
+        wait_for_channel.send(2) # send 2
+        sleep 2
+      end
+      wait_for_channel.send(3) # send 3
+    end
+    wait_for_channel.receive.should eq 2 # wait 2
+    s.client_connections.should eq 2
+    s.upstream_connections.should eq 2
+
+    spawn do
+      begin
+        AMQP::Client.start("amqp://localhost:5673") do |conn|
+          conn.channel
+          wait_for_channel.send(1) # send 1
+          sleep 2
+        end
+      rescue ex
+        puts ex.message
+        # ex.message.should be "Error reading socket: Connection reset by peer"
+        wait_for_channel.send(5) # send 5
+      end
+    end
+    wait_for_channel.receive.should eq 5 # wait 5
+    s.client_connections.should eq 3
+    s.upstream_connections.should eq 2
+  
+  end
+
 end

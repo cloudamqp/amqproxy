@@ -7,7 +7,7 @@ require "./upstream"
 
 module AMQProxy
   class Server
-    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5)
+    def initialize(upstream_host, upstream_port, upstream_tls, log_level = Logger::INFO, idle_connection_timeout = 5, max_upstream_connections = -1)
       @log = Logger.new(STDOUT)
       @log.level = log_level
       journald =
@@ -25,7 +25,7 @@ module AMQProxy
       end
       @clients_lock = Mutex.new
       @clients = Array(Client).new
-      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout)
+      @pool = Pool.new(upstream_host, upstream_port, upstream_tls, @log, idle_connection_timeout, max_upstream_connections)
       @log.info "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}"
     end
 
@@ -83,6 +83,12 @@ module AMQProxy
         socket.flush
       rescue ex : Upstream::Error
         @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect} (cause: #{ex.cause.inspect})" }
+        close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
+        close.to_io socket, IO::ByteFormat::NetworkEndian
+        socket.flush
+      rescue ex : Upstream::MaxConnectionError
+        @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect} (cause: #{ex.cause.inspect})" }
+        # TODO - What's the appropriate frame to close?
         close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush

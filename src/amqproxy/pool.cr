@@ -5,7 +5,7 @@ module AMQProxy
     getter :size
     @tls_ctx : OpenSSL::SSL::Context::Client?
 
-    def initialize(@host : String, @port : Int32, tls : Bool, @log : Logger, @idle_connection_timeout : Int32)
+    def initialize(@host : String, @port : Int32, tls : Bool, @log : Logger, @idle_connection_timeout : Int32, @max_pool_size : Int32)
       @pools = Hash(Tuple(String, String, String), Deque(Upstream)).new do |h, k|
         h[k] = Deque(Upstream).new
       end
@@ -19,8 +19,15 @@ module AMQProxy
       u = @lock.synchronize do
         c = @pools[{user, password, vhost}].pop?
         if c.nil? || c.closed?
-          c = Upstream.new(@host, @port, @tls_ctx, @log).connect(user, password, vhost)
-          @size += 1
+          @log.debug("Pool size: #{@size}/#{@max_pool_size}")
+          # no pool limit (-1) or limit new upstream connections
+          if @max_pool_size < 0 || (@max_pool_size > 0 && @size < @max_pool_size)
+            c = Upstream.new(@host, @port, @tls_ctx, @log).connect(user, password, vhost)
+            @size += 1
+          else
+            @log.error "Max upstream connections reached"
+            raise Upstream::MaxConnectionError.new("Max upstream connections reached")
+          end
         end
         c.current_client = client
         c

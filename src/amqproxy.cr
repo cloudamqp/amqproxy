@@ -10,6 +10,7 @@ class AMQProxy::CLI
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @log_level : Logger::Severity = Logger::INFO
   @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
+  @max_upstream_connections : Int32 = ENV.fetch("MAX_UPSTREAM_CONNECTIONS", "-1").to_i
   @upstream = ENV["AMQP_URL"]?
 
   def parse_config(path)
@@ -18,9 +19,10 @@ class AMQProxy::CLI
       when "main", ""
         section.each do |key, value|
           case key
-          when "upstream"                then @upstream = value
-          when "log_level"               then @log_level = Logger::Severity.parse(value)
-          when "idle_connection_timeout" then @idle_connection_timeout = value.to_i
+          when "upstream"                 then @upstream = value
+          when "log_level"                then @log_level = Logger::Severity.parse(value)
+          when "idle_connection_timeout"  then @idle_connection_timeout = value.to_i
+          when "max_upstream_connections" then @max_upstream_connections = value.to_i
           else                                raise "Unsupported config #{name}/#{key}"
           end
         end
@@ -50,6 +52,9 @@ class AMQProxy::CLI
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
       end
+      parser.on("-t MAX_UPSTREAM_CONNECTIONS", "--max-pool-size=POOL_SIZE", "Maximum amount of connections proxy will open to upstream. (Default -1, unlimited)") do |v|
+        @max_upstream_connections = v.to_i
+      end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = Logger::DEBUG }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
@@ -71,7 +76,7 @@ class AMQProxy::CLI
     port = u.port || default_port
     tls = u.scheme == "amqps"
 
-    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout)
+    server = AMQProxy::Server.new(u.host || "", port, tls, @log_level, @idle_connection_timeout, @max_upstream_connections)
 
     first_shutdown = true
     shutdown = ->(_s : Signal) do

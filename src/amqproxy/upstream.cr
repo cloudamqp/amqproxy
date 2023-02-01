@@ -213,5 +213,7 @@ module AMQProxy
     class AccessError < Error; end
 
     class WriteError < Error; end
+
+    class MaxConnectionError < Error; end
   end
 end
