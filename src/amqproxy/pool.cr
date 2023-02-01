@@ -25,8 +25,8 @@ module AMQProxy
             c = Upstream.new(@host, @port, @tls_ctx, @log).connect(user, password, vhost)
             @size += 1
           else
-            @log.error "Max upstream connections reached"
-            raise Upstream::MaxConnectionError.new("Max upstream connections reached")
+            @log.error "Max upstream connections reached. Pool size: #{@size}/#{@max_pool_size}"
+            raise Upstream::MaxConnectionError.new("Max upstream connections reached. Pool size: #{@size}/#{@max_pool_size}")
           end
         end
         c.current_client = client
