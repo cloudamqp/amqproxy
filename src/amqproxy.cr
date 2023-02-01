@@ -52,7 +52,7 @@ class AMQProxy::CLI
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
       end
-      parser.on("-t MAX_UPSTREAM_CONNECTIONS", "--max-pool-size=POOL_SIZE", "Maximum amount of connections proxy will open to upstream. (Default -1, unlimited)") do |v|
+      parser.on("-t MAX_UPSTREAM_CONNECTIONS", "--max-upstream-connections=UPSTREAM_MAX", "Maximum amount of connections proxy will open to upstream. (Default -1, unlimited)") do |v|
         @max_upstream_connections = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = Logger::DEBUG }
