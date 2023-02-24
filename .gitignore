@@ -3,6 +3,7 @@
 /bin/
 /.shards/
 /.vagrant/
+/.idea
 *.log
 *.deb
 *.tar.gz
