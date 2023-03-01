@@ -87,9 +87,8 @@ module AMQProxy
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
       rescue ex : Upstream::MaxConnectionError
-        @log.error { "Upstream error for user '#{user}' to vhost '#{vhost}': #{ex.inspect} (cause: #{ex.cause.inspect})" }
-        # TODO - What's the appropriate frame to close?
-        close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "UPSTREAM_ERROR", 0_u16, 0_u16)
+        @log.error { "Max upstream connections reached: #{ex.inspect} (cause: #{ex.cause.inspect})" }
+        close = AMQ::Protocol::Frame::Connection::Close.new(403_u16, "MAX_UPSTREAM_CONNECTIONS", 0_u16, 0_u16)
         close.to_io socket, IO::ByteFormat::NetworkEndian
         socket.flush
       end
