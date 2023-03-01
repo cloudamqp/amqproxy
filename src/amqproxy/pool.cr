@@ -21,7 +21,7 @@ module AMQProxy
         if c.nil? || c.closed?
           @log.debug("Pool size: #{@size}/#{@max_pool_size}")
           # no pool limit (-1) or limit new upstream connections
-          if @max_pool_size < 0 || (@max_pool_size > 0 && @size < @max_pool_size)
+          if @max_pool_size < 0 || @size < @max_pool_size
             c = Upstream.new(@host, @port, @tls_ctx, @log).connect(user, password, vhost)
             @size += 1
           else
