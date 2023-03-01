@@ -35,6 +35,6 @@ jobs:
         run: ls -Rl
 
       - name: Create Release
-        run: gh release create "$(git describe --abbrev=0)" ./**/*.tar.gz --notes "$(./build/release_notes)"
+        run: gh release create "${{ github.ref }}" ./**/*.tar.gz --notes "$(./build/release_notes)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
