@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.3] - 2023-02-15
+## [0.8.6] - 2023-03-01
 
 - Reenable TCP nodelay on the server connection, impacted performance
+
+## 0.8.3, 0.8.4, 0.8.5
+
+* 0.8.3 was tagged 2023-02-15 but a proper release was never created (release workflow failed)
+* 0.8.4 was tagged (and released) 2023-03-01 but it was built without bumping the version, so it reports 0.8.3
+* 0.8.5 was tagged 2023-03-01 but a proper release was never created (release workflow did not run)
 
 ## [0.8.2] - 2022-11-26
 
