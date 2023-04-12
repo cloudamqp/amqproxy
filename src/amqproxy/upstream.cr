@@ -18,6 +18,7 @@ module AMQProxy
       tcp_socket.tcp_keepalive_idle = 60
       tcp_socket.tcp_keepalive_count = 3
       tcp_socket.tcp_keepalive_interval = 10
+      tcp_socket.tcp_nodelay = true
       @socket =
         if tls_ctx = @tls_ctx
           OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host).tap do |c|
