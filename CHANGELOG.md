@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.7] - 2023-05-08
+
+- Disables the Nagle algorithm on the upstream socket as well ([#113](https://github.com/cloudamqp/amqproxy/pull/113))
+- Added error handling for IO error ([#104](https://github.com/cloudamqp/amqproxy/pull/104))
+
 ## [0.8.6] - 2023-03-01
 
 - Reenable TCP nodelay on the server connection, impacted performance
