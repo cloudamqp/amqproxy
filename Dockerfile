@@ -6,7 +6,7 @@ COPY src/ src/
 RUN shards build --production --release --debug
 
 FROM alpine:latest
-RUN apk add --no-cache libssl1.1 pcre libevent libgcc
+RUN apk add --no-cache libssl1.1 pcre2 libevent libgcc
 COPY --from=builder /tmp/bin/amqproxy /usr/bin/amqproxy
 USER nobody:nogroup
 EXPOSE 5673
