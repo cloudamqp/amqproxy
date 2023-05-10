@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.8] - 2023-05-10
+
+- Same as 0.8.7 but fixes missing PCRE2 dependency in the `cloudamqp/amqproxy` in Docker Hub image
+
 ## [0.8.7] - 2023-05-08
 
 - Disables the Nagle algorithm on the upstream socket as well ([#113](https://github.com/cloudamqp/amqproxy/pull/113))
