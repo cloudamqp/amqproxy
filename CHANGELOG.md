@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Alpine Docker image now uses user/group `amqpproxy` (1000:1000) [#107](https://github.com/cloudamqp/amqproxy/pull/107)
+
 ## [0.8.8] - 2023-05-10
 
 - Same as 0.8.7 but fixes missing PCRE2 dependency in the `cloudamqp/amqproxy` Docker Hub image
