@@ -6,8 +6,10 @@ COPY src/ src/
 RUN shards build --production --release --debug
 
 FROM alpine:latest
-RUN apk add --no-cache libssl1.1 pcre2 libevent libgcc
+RUN apk add --no-cache libssl1.1 pcre2 libevent libgcc \
+    && addgroup --gid 1000 amqpproxy \
+    && adduser --no-create-home --disabled-password --uid 1000 amqpproxy -G amqpproxy
 COPY --from=builder /tmp/bin/amqproxy /usr/bin/amqproxy
-USER nobody:nogroup
+USER 1000:1000
 EXPOSE 5673
 ENTRYPOINT ["/usr/bin/amqproxy", "--listen=0.0.0.0"]
