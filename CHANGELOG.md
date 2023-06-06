@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.8.11] - 2023-06-06
+## [0.8.9] - 2023-06-06
 
 - Alpine Docker image now uses user/group `amqpproxy` (1000:1000) [#107](https://github.com/cloudamqp/amqproxy/pull/107)
 
