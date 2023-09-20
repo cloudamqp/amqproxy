@@ -15,7 +15,7 @@ module AMQProxy
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
-    def borrow(user : String, password : String, vhost : String, client : Client, &block : Upstream -> _)
+    def borrow(user : String, password : String, vhost : String, client : Client, & : Upstream -> _)
       u = @lock.synchronize do
         c = @pools[{user, password, vhost}].pop?
         if c.nil? || c.closed?
