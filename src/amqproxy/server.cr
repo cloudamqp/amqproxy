@@ -99,7 +99,7 @@ module AMQProxy
       # print "\r#{@clients.size} clients\t\t #{@pool.size} upstreams"
     end
 
-    private def active_client(client)
+    private def active_client(client, &)
       @clients_lock.synchronize do
         @clients << client
       end
