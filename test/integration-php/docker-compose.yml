@@ -51,7 +51,7 @@ services:
     environment:
       TOXIPROXY_URL: "http://toxiproxy:8474"
     # The PHP client needs to start and connect before we add the toxiproxy toxic
-    # that will brake the amqproxy upstream connection, depends_on makes this happen
+    # that will break the amqproxy upstream connection, depends_on makes this happen
     depends_on:
       php-amqp:
         condition: service_started
