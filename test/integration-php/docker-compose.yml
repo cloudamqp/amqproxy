@@ -1,0 +1,57 @@
+version: "3.8"
+configs:
+  toxiproxy_config:
+    file: ./toxiproxy.json
+services:
+  amqproxy:
+    build: ../../
+    expose:
+      - "5673"
+    entrypoint: ["amqproxy", "--debug", "--listen=0.0.0.0", "amqp://toxiproxy:7777"]
+    depends_on:
+      toxiproxy:
+        condition: service_started
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:latest
+    expose:
+      - "8474" # Toxiproxy HTTP API
+      - "7777" # Expose AMQP broker on this port
+    command: ["-host=0.0.0.0", "-config=/toxiproxy_config"]
+    configs:
+      - toxiproxy_config
+    depends_on:
+      lavinmq:
+        condition: service_healthy
+
+  lavinmq:
+    image: cloudamqp/lavinmq:latest
+    expose:
+      - "5672"
+    healthcheck:
+      test: ["CMD-SHELL", "lavinmqctl status"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+
+  php-amqp:
+   build: ./php-amqp
+   environment:
+     TEST_RABBITMQ_HOST: amqproxy
+     TEST_RABBITMQ_PORT: 5673
+   # Makes this container exit with error if the test script hangs (timeout)
+   command: ["timeout", "15s", "php", "-d", "extension=amqp.so", "get-test.php"]
+   depends_on:
+     amqproxy:
+      condition: service_started
+
+  toxiproxy-cli:
+    # Need to build our own image as the toxiproxy image has no shell
+    build: ./toxiproxy-cli
+    environment:
+      TOXIPROXY_URL: "http://toxiproxy:8474"
+    # The PHP client needs to start and connect before we add the toxiproxy toxic
+    # that will brake the amqproxy upstream connection, depends_on makes this happen
+    depends_on:
+      php-amqp:
+        condition: service_started

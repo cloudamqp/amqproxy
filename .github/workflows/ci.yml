@@ -45,3 +45,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: crystal tool format --check
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: PHP client integration test using Docker Compose
+        run: ./test/integration-php.sh
