@@ -1,10 +1,10 @@
 <?php
 
-define("HOST",     getenv("TEST_RABBITMQ_HOST") ? getenv("TEST_RABBITMQ_HOST") : "localhost");
-define("PORT",     getenv("TEST_RABBITMQ_PORT") ? getenv("TEST_RABBITMQ_PORT") : "5672");
-define("USER",     getenv("TEST_RABBITMQ_USER") ? getenv("TEST_RABBITMQ_USER") : "guest");
-define("PASS",     getenv("TEST_RABBITMQ_PASS") ? getenv("TEST_RABBITMQ_PASS") : "guest");
-define("ATTEMPTS", getenv("TEST_ATTEMPTS")      ? getenv("TEST_ATTEMPTS")      : 10);
+define("HOST",     getenv("TEST_RABBITMQ_HOST") ?: "localhost");
+define("PORT",     getenv("TEST_RABBITMQ_PORT") ?: "5672");
+define("USER",     getenv("TEST_RABBITMQ_USER") ?: "guest");
+define("PASS",     getenv("TEST_RABBITMQ_PASS") ?: "guest");
+define("ATTEMPTS", getenv("TEST_ATTEMPTS")      ?: 10);
 
 $connection = new AMQPConnection();
 $connection->setHost(HOST);
