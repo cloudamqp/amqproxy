@@ -21,18 +21,18 @@ services:
     configs:
       - toxiproxy_config
     depends_on:
-      lavinmq:
+      rabbitmq:
         condition: service_healthy
 
-  lavinmq:
-    image: cloudamqp/lavinmq:latest
+  rabbitmq:
+    image: rabbitmq:latest
     expose:
       - "5672"
     healthcheck:
-      test: ["CMD-SHELL", "lavinmqctl status"]
-      interval: 1s
-      timeout: 1s
+      test: ["CMD-SHELL", "rabbitmqctl status"]
+      interval: 2s
       retries: 10
+      start_period: 20s
 
   php-amqp:
    build: ./php-amqp
