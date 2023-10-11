@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.13] - 2023-10-11
+
+- Disconnect clients on broken upstream connection [#128](https://github.com/cloudamqp/amqproxy/pull/128)
+
 ## [v0.8.12] - 2023-09-20
 
 No changes from 0.8.11. Tagged to build missing Debian/Ubuntu packages.
