@@ -1,0 +1,8 @@
+[
+  {
+    "name": "between-proxy-and-broker",
+    "listen": "0.0.0.0:7777",
+    "upstream": "rabbitmq:5672",
+    "enabled": true
+  }
+]

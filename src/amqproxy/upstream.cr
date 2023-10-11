@@ -40,6 +40,7 @@ module AMQProxy
     # Frames from upstream (to client)
     def read_loop # ameba:disable Metrics/CyclomaticComplexity
       socket = @socket
+      client = @current_client
       loop do
         AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
           case frame
@@ -55,7 +56,7 @@ module AMQProxy
             write frame
             next
           end
-          if client = @current_client
+          if client
             begin
               client.write(frame)
             rescue ex
@@ -84,6 +85,7 @@ module AMQProxy
       @log.error "Error reading from upstream: #{ex.inspect_with_backtrace}" unless @socket.closed?
     ensure
       @socket.close unless @socket.closed?
+      client.close_socket if client
     end
 
     SAFE_BASIC_METHODS = {40, 10} # qos and publish
