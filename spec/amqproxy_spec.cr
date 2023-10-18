@@ -21,6 +21,44 @@ describe AMQProxy::Server do
     end
   end
 
+  it "publish and consume works" do
+    server = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    begin
+      spawn { server.listen("127.0.0.1", 5673) }
+      Fiber.yield
+
+      queue_name = "amqproxy-test-queue"
+      num_received_messages = 0
+      num_messages_to_publish = 5
+
+      num_messages_to_publish.times do
+        AMQP::Client.start("amqp://localhost:5673") do |conn|
+          channel = conn.channel
+          queue = channel.queue(queue_name)
+          queue.publish_confirm("Message from AMQProxy specs")
+        end
+        sleep 0.1
+      end
+
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        channel = conn.channel
+        channel.basic_consume(queue_name, tag: "AMQProxy specs") do |msg|
+          body = msg.body_io.to_s
+          if body == "Message from AMQProxy specs"
+            # FIXME: ack:ing causes this bug
+            # https://github.com/cloudamqp/amqproxy/issues/137
+            # channel.basic_ack(msg.delivery_tag)
+            num_received_messages += 1
+          end
+        end
+      end
+
+      num_received_messages.should eq num_messages_to_publish
+    ensure
+      server.stop_accepting_clients
+    end
+  end
+
   it "can reconnect if upstream closes" do
     s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
     begin

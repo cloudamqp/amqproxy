@@ -1,0 +1,6 @@
+version: "3.8"
+services:
+  spec:
+    build:
+      context: ..
+      dockerfile: spec/Dockerfile

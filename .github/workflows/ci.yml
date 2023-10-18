@@ -2,6 +2,7 @@ name: CI
 on:
   push:
     paths:
+      - 'run-specs-in-docker.sh'
       - '.github/workflows/ci.yml'
       - 'shard.yml'
       - 'shard.lock'
@@ -12,28 +13,17 @@ on:
 jobs:
   spec:
     runs-on: ubuntu-latest
-    container: 84codes/crystal:latest-ubuntu-22.04
+    timeout-minutes: 10
     steps:
-      - name: Install RabbitMQ
-        run: apt-get update && apt-get install -y rabbitmq-server
-
-      - name: Start RabbitMQ
-        run: RABBITMQ_PID_FILE=/tmp/rabbitmq.pid rabbitmq-server -detached
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install shards
-        run: sed -i '/ameba/d' shard.yml && shards install
-
-      - name: Wait for RabbitMQ to start
-        run: rabbitmqctl wait /tmp/rabbitmq.pid
-
       - name: Run tests
-        run: crystal spec --order random
+        run: ./run-specs-in-docker.sh
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     container: 84codes/crystal:latest-ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +32,7 @@ jobs:
 
   format:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     container: 84codes/crystal:latest-ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
