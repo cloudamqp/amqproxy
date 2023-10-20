@@ -1,6 +1,25 @@
 # Contributing
 
-_TODO_
+## Development
+
+Run tests in Docker:
+
+```bash
+docker build  . -f spec/Dockerfile -t amqproxy_spec
+docker run --rm -it -v $(pwd):/app -w /app --entrypoint bash amqproxy_spec
+
+# ensure rabbitmq is up, run all specs
+./entrypoint.sh
+
+# run single spec
+crystal spec --example "keeps connections open"
+```
+
+Run tests using Docker Compose:
+
+```bash
+./run-specs-in-docker.sh
+```
 
 ## Release
 
