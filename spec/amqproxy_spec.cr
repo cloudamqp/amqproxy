@@ -28,6 +28,7 @@ describe AMQProxy::Server do
       Fiber.yield
 
       queue_name = "amqproxy-test-queue"
+      message_payload = "Message from AMQProxy specs"
       num_received_messages = 0
       num_messages_to_publish = 5
 
@@ -35,19 +36,17 @@ describe AMQProxy::Server do
         AMQP::Client.start("amqp://localhost:5673") do |conn|
           channel = conn.channel
           queue = channel.queue(queue_name)
-          queue.publish_confirm("Message from AMQProxy specs")
+          queue.publish_confirm(message_payload)
         end
         sleep 0.1
       end
 
       AMQP::Client.start("amqp://localhost:5673") do |conn|
         channel = conn.channel
-        channel.basic_consume(queue_name, tag: "AMQProxy specs") do |msg|
+        channel.basic_consume(queue_name, block: true, tag: "AMQProxy specs") do |msg|
           body = msg.body_io.to_s
-          if body == "Message from AMQProxy specs"
-            # FIXME: ack:ing causes this bug
-            # https://github.com/cloudamqp/amqproxy/issues/137
-            # channel.basic_ack(msg.delivery_tag)
+          if body == message_payload
+            channel.basic_ack(msg.delivery_tag)
             num_received_messages += 1
           end
         end
