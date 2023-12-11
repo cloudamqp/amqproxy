@@ -2,17 +2,17 @@ require "./spec_helper"
 
 describe AMQProxy::Server do
   it "keeps connections open" do
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
       10.times do
         AMQP::Client.start("amqp://localhost:5673") do |conn|
-          conn.channel
+          ch = conn.channel
+          ch.basic_publish "foobar", "amq.fanout", ""
           s.client_connections.should eq 1
           s.upstream_connections.should eq 1
         end
-        sleep 0.1
       end
       s.client_connections.should eq 0
       s.upstream_connections.should eq 1
@@ -22,7 +22,7 @@ describe AMQProxy::Server do
   end
 
   it "publish and consume works" do
-    server = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    server = AMQProxy::Server.new("127.0.0.1", 5672, false)
     begin
       spawn { server.listen("127.0.0.1", 5673) }
       Fiber.yield
@@ -38,18 +38,19 @@ describe AMQProxy::Server do
           queue = channel.queue(queue_name)
           queue.publish_confirm(message_payload)
         end
-        sleep 0.1
       end
+      sleep 0.1
 
       AMQP::Client.start("amqp://localhost:5673") do |conn|
         channel = conn.channel
-        channel.basic_consume(queue_name, block: true, tag: "AMQProxy specs") do |msg|
+        channel.basic_consume(queue_name, no_ack: false, tag: "AMQProxy specs") do |msg|
           body = msg.body_io.to_s
           if body == message_payload
             channel.basic_ack(msg.delivery_tag)
             num_received_messages += 1
           end
         end
+        sleep 0.1
       end
 
       num_received_messages.should eq num_messages_to_publish
@@ -58,8 +59,30 @@ describe AMQProxy::Server do
     end
   end
 
+  it "a client can open all channels" do
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
+    begin
+      spawn { s.listen("127.0.0.1", 5673) }
+      Fiber.yield
+      max = 4000
+      AMQP::Client.start("amqp://localhost:5673?channel_max=#{max}") do |conn|
+        conn.channel_max.should eq max
+        conn.channel_max.times do
+          conn.channel
+        end
+        s.client_connections.should eq 1
+        s.upstream_connections.should eq 2
+      end
+      sleep 0.1
+      s.client_connections.should eq 0
+      s.upstream_connections.should eq 2
+    ensure
+      s.stop_accepting_clients
+    end
+  end
+
   it "can reconnect if upstream closes" do
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
@@ -83,7 +106,7 @@ describe AMQProxy::Server do
 
   it "responds to upstream heartbeats" do
     system("#{MAYBE_SUDO}rabbitmqctl eval 'application:set_env(rabbit, heartbeat, 1).' > /dev/null").should be_true
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
     begin
       spawn { s.listen("127.0.0.1", 5673) }
       Fiber.yield
@@ -102,7 +125,7 @@ describe AMQProxy::Server do
   it "supports waiting for client connections on graceful shutdown" do
     started = Time.utc.to_unix
 
-    s = AMQProxy::Server.new("127.0.0.1", 5672, false, Logger::DEBUG, 5)
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false, 5)
     wait_for_channel = Channel(Int32).new # channel used to wait for certain calls, to test certain behaviour
     spawn do
       s.listen("127.0.0.1", 5673)
@@ -133,11 +156,11 @@ describe AMQProxy::Server do
     end
     wait_for_channel.receive.should eq 2 # wait 2
     s.client_connections.should eq 2
-    s.upstream_connections.should eq 2
+    s.upstream_connections.should eq 1
     spawn s.stop_accepting_clients
     wait_for_channel.receive.should eq 3 # wait 3
     s.client_connections.should eq 1
-    s.upstream_connections.should eq 2 # since connection stays open
+    s.upstream_connections.should eq 1 # since connection stays open
     spawn do
       begin
         AMQP::Client.start("amqp://localhost:5673") do |conn|
@@ -153,7 +176,7 @@ describe AMQProxy::Server do
     end
     wait_for_channel.receive.should eq 4 # wait 4
     s.client_connections.should eq 1     # since the new connection should not have worked
-    s.upstream_connections.should eq 2   # since connections stay open
+    s.upstream_connections.should eq 1   # since connections stay open
     wait_for_channel.receive.should eq 5 # wait 5
     s.client_connections.should eq 0     # since now the server should be closed
     s.upstream_connections.should eq 1

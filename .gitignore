@@ -9,3 +9,4 @@
 *.tar.gz
 *.swp
 /builds/
+shard.override.yml

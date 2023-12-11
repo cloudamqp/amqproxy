@@ -1,77 +1,157 @@
 require "socket"
 require "amq-protocol"
 require "./version"
+require "./upstream"
+require "./records"
 
 module AMQProxy
-  struct Client
-    @lock = Mutex.new
+  class Client
+    Log = ::Log.for(self)
+    getter credentials : Credentials
+    @channel_map = Hash(UInt16, UpstreamChannel).new
+    @outgoing_frames = Channel(AMQ::Protocol::Frame).new(128)
+    @frame_max : UInt32
+    @channel_max : UInt16
+    @heartbeat : UInt16
 
     def initialize(@socket : TCPSocket)
+      set_socket_options(@socket)
+      tune_ok, @credentials = negotiate(@socket)
+      @frame_max = tune_ok.frame_max
+      @channel_max = tune_ok.channel_max
+      @heartbeat = tune_ok.heartbeat
+      spawn write_loop
     end
 
-    def read_loop(upstream : Upstream)
-      socket = @socket
+    # frames from enduser
+    def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
+      Log.context.set(remote_address: socket.remote_address.to_s)
+      Log.debug { "Connected" }
       loop do
-        AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
-          case frame
-          when AMQ::Protocol::Frame::Heartbeat
-            socket.write_bytes frame, IO::ByteFormat::NetworkEndian
-            socket.flush
-          when AMQ::Protocol::Frame::Connection::CloseOk
-            return
-          else
-            if response_frame = upstream.write frame
-              socket.write_bytes response_frame, IO::ByteFormat::NetworkEndian
-              socket.flush
-              return if response_frame.is_a? AMQ::Protocol::Frame::Connection::CloseOk
-            end
+        case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+        when AMQ::Protocol::Frame::Heartbeat           then write frame
+        when AMQ::Protocol::Frame::Connection::CloseOk then return
+        when AMQ::Protocol::Frame::Connection::Close
+          close_all_upstream_channels
+          write AMQ::Protocol::Frame::Connection::CloseOk.new
+          return
+        when AMQ::Protocol::Frame::Channel::Open
+          raise "Channel already opened" if @channel_map.has_key? frame.channel
+          upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
+          @channel_map[frame.channel] = upstream_channel
+          write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+        when AMQ::Protocol::Frame::Channel::Close
+          if upstream_channel = @channel_map.delete(frame.channel)
+            upstream_channel.unassign
+          end
+          write AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+        when AMQ::Protocol::Frame::Channel::CloseOk
+          # noop
+        when frame.channel.zero?
+          Log.error { "Unexpected connection frame: #{frame}" }
+          close_connection(540_u16, "NOT_IMPLEMENTED", frame)
+        else
+          src_channel = frame.channel
+          begin
+            upstream_channel = @channel_map[frame.channel]
+            upstream_channel.write(frame)
+          rescue ex : Upstream::WriteError
+            close_channel(src_channel)
+          rescue KeyError
+            close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           end
         end
       end
-    rescue ex : Upstream::WriteError
-      upstream_disconnected
     rescue ex : IO::EOFError
-      raise Error.new("Client disconnected", ex) unless @socket.closed?
-    rescue ex
-      raise ReadError.new "Client read error", ex
+      Log.debug { "Disconnected" }
+    rescue ex : IO::Error
+      Log.error(exception: ex) { "IO error" } unless socket.closed?
+    rescue ex : Upstream::AccessError
+      Log.error { "Access refused, reason: #{ex.message}" }
+      close_connection(403_u16, ex.message || "ACCESS_REFUSED")
+    rescue ex : Upstream::Error
+      Log.error(exception: ex) { "Upstream error" }
+      close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
+    else
+      Log.debug { "Disconnected" }
     ensure
-      @socket.close rescue nil
+      @outgoing_frames.close
+      close_all_upstream_channels
     end
 
-    # Send frame to client
-    def write(frame : AMQ::Protocol::Frame)
-      @lock.synchronize do
-        socket = @socket
-        return if socket.closed?
-        frame.to_io(socket, IO::ByteFormat::NetworkEndian)
-        socket.flush
-        case frame
-        when AMQ::Protocol::Frame::Connection::CloseOk
-          socket.close
-        end
+    private def write_loop(socket = @socket)
+      while frame = @outgoing_frames.receive?
+        socket.write_bytes frame, IO::ByteFormat::NetworkEndian
+        socket.flush unless expect_more_publish_frames?(frame)
+
+        break if frame.is_a? AMQ::Protocol::Frame::Connection::CloseOk
       end
-    rescue ex : Socket::Error
-      raise WriteError.new "Error writing to client", ex
+    rescue ex : IO::Error
+      raise ex unless socket.closed?
+    ensure
+      @outgoing_frames.close
+      socket.close rescue nil
+      close_all_upstream_channels
     end
 
-    def upstream_disconnected
-      write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
-        "UPSTREAM_ERROR",
-        0_u16, 0_u16)
-    rescue WriteError
+    # Send frame to client, channel id should already be remapped by the caller
+    def write(frame : AMQ::Protocol::Frame)
+      @outgoing_frames.send frame
+    end
+
+    def close_connection(code, text, frame = nil)
+      case frame
+      when AMQ::Protocol::Frame::Method
+        write AMQ::Protocol::Frame::Connection::Close.new(code, text, frame.class_id, frame.method_id)
+      else
+        write AMQ::Protocol::Frame::Connection::Close.new(code, text, 0_u16, 0_u16)
+      end
+    end
+
+    def close_channel(id)
+      write AMQ::Protocol::Frame::Channel::Close.new(id, 500_u16, "UPSTREAM_DISCONNECTED", 0_u16, 0_u16)
+    end
+
+    private def close_all_upstream_channels
+      @channel_map.each_value do |upstream_channel|
+        upstream_channel.unassign
+      rescue Upstream::WriteError
+        next # Nothing to do
+      end
+      @channel_map.clear
+    end
+
+    private def expect_more_publish_frames?(frame) : Bool
+      case frame
+      when AMQ::Protocol::Frame::Basic::Publish then true
+      when AMQ::Protocol::Frame::Header         then frame.body_size != 0
+      when AMQ::Protocol::Frame::Body           then frame.bytesize == @frame_max
+      else                                           false
+      end
     end
 
     def close
       write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
         "AMQProxy shutdown",
         0_u16, 0_u16)
+      # @socket.read_timeout = 1.seconds
     end
 
+    # Close the outgoing frames channel which will let write_loop close the socket
     def close_socket
-      @socket.close rescue nil
+      @outgoing_frames.close
     end
 
-    def self.negotiate(socket)
+    private def set_socket_options(socket = @socket)
+      socket.sync = false
+      socket.keepalive = true
+      socket.tcp_nodelay = true
+      socket.tcp_keepalive_idle = 60
+      socket.tcp_keepalive_count = 3
+      socket.tcp_keepalive_interval = 10
+    end
+
+    private def negotiate(socket = @socket)
       proto = uninitialized UInt8[8]
       socket.read_fully(proto.to_slice)
 
@@ -82,68 +162,62 @@ module AMQProxy
         raise IO::EOFError.new("Invalid protocol start")
       end
 
-      props = AMQ::Protocol::Table.new({
-        product:      "AMQProxy",
-        version:      VERSION,
-        capabilities: {
-          consumer_priorities:          true,
-          exchange_exchange_bindings:   true,
-          "connection.blocked":         true,
-          authentication_failure_close: true,
-          per_consumer_qos:             true,
-          "basic.nack":                 true,
-          direct_reply_to:              true,
-          publisher_confirms:           true,
-          consumer_cancel_notify:       true,
-        },
-      })
-      start = AMQ::Protocol::Frame::Connection::Start.new(server_properties: props)
+      start = AMQ::Protocol::Frame::Connection::Start.new(server_properties: ServerProperties)
       start.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
       user = password = ""
-      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
-        start_ok = frame.as(AMQ::Protocol::Frame::Connection::StartOk)
-        case start_ok.mechanism
-        when "PLAIN"
-          resp = start_ok.response
-          if i = resp.index('\u0000', 1)
-            user = resp[1...i]
-            password = resp[(i + 1)..-1]
-          else
-            raise "Invalid authentication information encoding"
-          end
-        when "AMQPLAIN"
-          io = IO::Memory.new(start_ok.response)
-          tbl = AMQ::Protocol::Table.from_io(io, IO::ByteFormat::NetworkEndian,
-            start_ok.response.size.to_u32)
-          user = tbl["LOGIN"].as(String)
-          password = tbl["PASSWORD"].as(String)
-        else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
+      start_ok = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::StartOk)
+      case start_ok.mechanism
+      when "PLAIN"
+        resp = start_ok.response
+        if i = resp.index('\u0000', 1)
+          user = resp[1...i]
+          password = resp[(i + 1)..-1]
+        else
+          raise "Invalid authentication information encoding"
         end
+      when "AMQPLAIN"
+        io = IO::Memory.new(start_ok.response)
+        tbl = AMQ::Protocol::Table.from_io(io, IO::ByteFormat::NetworkEndian, start_ok.response.size.to_u32)
+        user = tbl["LOGIN"].as(String)
+        password = tbl["PASSWORD"].as(String)
+      else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
       end
 
-      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: 0_u16, heartbeat: 0_u16)
+      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: UInt16::MAX, heartbeat: 0_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      AMQ::Protocol::Frame.from_io socket, IO::ByteFormat::NetworkEndian do |_tune_ok|
-      end
+      tune_ok = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::TuneOk)
 
-      vhost = ""
-      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian) do |frame|
-        open = frame.as(AMQ::Protocol::Frame::Connection::Open)
-        vhost = open.vhost
-      end
+      open = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::Open)
+      vhost = open.vhost
 
       open_ok = AMQ::Protocol::Frame::Connection::OpenOk.new
       open_ok.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      {vhost, user, password}
+      {tune_ok, Credentials.new(user, password, vhost)}
     rescue ex
       raise NegotiationError.new "Client negotiation failed", ex
     end
+
+    ServerProperties = AMQ::Protocol::Table.new({
+      product:      "AMQProxy",
+      version:      VERSION,
+      capabilities: {
+        consumer_priorities:          true,
+        exchange_exchange_bindings:   true,
+        "connection.blocked":         false,
+        authentication_failure_close: true,
+        per_consumer_qos:             true,
+        "basic.nack":                 true,
+        direct_reply_to:              true,
+        publisher_confirms:           true,
+        consumer_cancel_notify:       true,
+      },
+    })
 
     class Error < Exception; end
 
