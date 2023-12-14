@@ -25,7 +25,7 @@ jobs:
       - name: Build
         run: build/tar 1
       - name: Upload github artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "*.tar.gz"
           name: tar
@@ -58,7 +58,7 @@ jobs:
           outputs: builds
 
       - name: Upload GitHub artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "builds/**/*.deb"
           name: debs
