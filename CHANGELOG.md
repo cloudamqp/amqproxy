@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.0] - 2024-02-19
+
+- Nothing changed from v0.8.14
+
 ## [v0.8.14] - 2023-10-20
 
 - Update current client in `Upstream#read_loop` [#138](https://github.com/cloudamqp/amqproxy/pull/138)
