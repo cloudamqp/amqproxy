@@ -1,4 +1,4 @@
-ARG build_image=84codes/crystal:latest-fedora-37
+ARG build_image=84codes/crystal:latest-fedora-39
 
 FROM $build_image AS builder
 RUN dnf install -y --nodocs --setopt=install_weak_deps=False --repo=fedora,updates \
@@ -19,7 +19,7 @@ ARG MAKEFLAGS
 RUN rpmbuild -ba /root/rpmbuild/SPECS/amqproxy.spec
 RUN rpmlint /root/rpmbuild/RPMS/* || true
 
-FROM fedora:37 AS test
+FROM fedora:39 AS test
 COPY --from=builder /root/rpmbuild/RPMS /tmp/RPMS
 RUN find /tmp/RPMS -type f -exec dnf install -y {} \;
 RUN amqproxy --version
