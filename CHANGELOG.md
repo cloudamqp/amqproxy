@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v2.0.0] - 2024-02-19
+## [v2.0.0-rc.1] - 2024-02-19
 
 - Rewrite of the proxy where Channels are pooled rather than connections. When a client opens a channel it will get a channel on a shared upstream connection, the proxy will remap the channel numbers between the two. Many client connections can therefor share a single upstream connection. Upside is that way fewer connections are needed to the upstream server, downside is that if there's a misbehaving client, for which the server closes the connection, all channels for other clients on that shared connection will also be closed.
 
