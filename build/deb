@@ -70,6 +70,10 @@ deb-systemd-helper purge amqproxy.service
 EOF
 chmod +x debroot/DEBIAN/prerm
 
+cat > debroot/DEBIAN/conffiles << EOF
+/etc/amqproxy.ini
+EOF
+
 debdir=builds/$ID/$VERSION_CODENAME
 debname=amqproxy_${pkg_version}-${pkg_revision}_${architecture}.deb
 mkdir -p "$debdir"
