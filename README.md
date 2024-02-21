@@ -16,15 +16,18 @@ As of version 2.0.0 connections to the server can be shared by multiple client c
 
 ### Debian/Ubuntu
 
-Packages are uploaded to [Packagecloud](https://packagecloud.io/cloudamqp/amqproxy). Install the latest version with:
+Packages are available at [Packagecloud](https://packagecloud.io/cloudamqp/amqproxy). Install the latest version with:
 
 ```sh
-wget -qO- https://packagecloud.io/cloudamqp/amqproxy/gpgkey | sudo apt-key add -
-echo "deb https://packagecloud.io/cloudamqp/amqproxy/ubuntu/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/amqproxy.list
-
-sudo apt update
-sudo apt install amqproxy
+curl -fsSL https://packagecloud.io/cloudamqp/amqproxy/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/amqproxy.gpg > /dev/null
+. /etc/os-release
+echo "deb [signed-by=/usr/share/keyrings/amqproxy.gpg] https://packagecloud.io/cloudamqp/amqproxy/$ID $VERSION_CODENAME main" | sudo tee /etc/apt/sources.list.d/amqproxy.list
+sudo apt-get update
+sudo apt-get install amqproxy
 ```
+
+If you need to install a specific version, do so using the following command:
+`sudo apt install lavinmq=<version>`. This works for both upgrades and downgrades.
 
 ### Docker/Podman
 
