@@ -31,8 +31,12 @@ module AMQProxy
       @server = server = TCPServer.new(address, port)
       Log.info { "Proxy listening on #{server.local_address}" }
       while socket = server.accept?
-        addr = socket.remote_address
-        spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
+        begin
+          addr = socket.remote_address
+          spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
+        rescue IO::Error
+          next
+        end
       end
       Log.info { "Proxy stopping accepting connections" }
     end
