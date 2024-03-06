@@ -1,12 +1,5 @@
 name: RPM
 on:
-  pull_request:
-    paths:
-      - .github/workflows/rpm.yml
-      - Dockerfile.rpm
-      - amqproxy.spec
-      - shard.lock
-      - src/**
   push:
     branches:
       - main
