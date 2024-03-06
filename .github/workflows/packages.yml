@@ -34,7 +34,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: ["ubuntu-jammy", "ubuntu-focal", "ubuntu-bionic", "debian-buster", "debian-bullseye"]
+        os:
+          - ubuntu-jammy    # Ubuntu 22.04
+          - ubuntu-focal    # Ubuntu 20.04
+          - debian-bookworm # Debian 12
+          - debian-bullseye # Debian 11
       fail-fast: false
     steps:
       - name: Checkout
