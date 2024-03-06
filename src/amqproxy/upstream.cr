@@ -87,6 +87,9 @@ module AMQProxy
           end
           return
         when AMQ::Protocol::Frame::Connection::CloseOk then return
+        when AMQ::Protocol::Frame::Connection::Blocked,
+             AMQ::Protocol::Frame::Connection::Unblocked
+          send_to_all_clients(frame)
         when AMQ::Protocol::Frame::Channel::OpenOk  # we assume it always succeeds
         when AMQ::Protocol::Frame::Channel::CloseOk # when channel pool requested channel close
         else
@@ -122,6 +125,21 @@ module AMQProxy
         end
         Log.debug { "Upstream connection closed, closing #{cnt} client channels" } unless cnt.zero?
         @channels.clear
+      end
+    end
+
+    private def send_to_all_clients(frame : AMQ::Protocol::Frame::Connection)
+      Log.debug { "Sending broadcast frame to all client connections" }
+      clients = Set(Client).new
+      @channels_lock.synchronize do
+        @channels.each_value do |downstream_channel|
+          if dc = downstream_channel
+            clients << dc.client
+          end
+        end
+      end
+      clients.each do |client|
+        client.write frame
       end
     end
 
@@ -232,7 +250,7 @@ module AMQProxy
       capabilities:    {
         consumer_priorities:          true,
         exchange_exchange_bindings:   true,
-        "connection.blocked":         false,
+        "connection.blocked":         true,
         authentication_failure_close: true,
         per_consumer_qos:             true,
         "basic.nack":                 true,
