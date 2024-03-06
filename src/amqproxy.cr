@@ -10,6 +10,7 @@ class AMQProxy::CLI
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @log_level : Log::Severity = Log::Severity::Info
   @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
+  @term_timeout = 0
   @upstream = ENV["AMQP_URL"]?
 
   def parse_config(path)
@@ -21,6 +22,7 @@ class AMQProxy::CLI
           when "upstream"                then @upstream = value
           when "log_level"               then @log_level = Log::Severity.parse(value)
           when "idle_connection_timeout" then @idle_connection_timeout = value.to_i
+          when "term_timeout"            then @term_timeout = value.to_i
           else                                raise "Unsupported config #{name}/#{key}"
           end
         end
@@ -49,6 +51,9 @@ class AMQProxy::CLI
       parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| @listen_port = v.to_i }
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
+      end
+      parser.on("--term-timeout=SECONDS", "At TERM the server will wait this many seconds for clients to gracefully close their sockets (default: infinite)") do |v|
+        @term_timeout = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = Log::Severity::Debug }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
@@ -86,8 +91,14 @@ class AMQProxy::CLI
         first_shutdown = false
         server.stop_accepting_clients
         server.disconnect_clients
+        if @term_timeout > 0
+          spawn do
+            sleep @term_timeout
+            abort "Exiting with #{server.client_connections} client connections still open"
+          end
+        end
       else
-        server.close_sockets
+        abort "Exiting with #{server.client_connections} client connections still open"
       end
     end
     Signal::INT.trap &shutdown
