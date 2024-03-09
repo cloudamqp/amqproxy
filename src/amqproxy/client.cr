@@ -46,7 +46,9 @@ module AMQProxy
           end
           write AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
         when AMQ::Protocol::Frame::Channel::CloseOk
-          # noop
+          if upstream_channel = @channel_map.delete(frame.channel)
+            upstream_channel.write(frame)
+          end
         when frame.channel.zero?
           Log.error { "Unexpected connection frame: #{frame}" }
           close_connection(540_u16, "NOT_IMPLEMENTED", frame)
