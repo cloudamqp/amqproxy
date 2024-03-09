@@ -223,7 +223,7 @@ module AMQProxy
       capabilities: {
         consumer_priorities:          true,
         exchange_exchange_bindings:   true,
-        "connection.blocked":         false,
+        "connection.blocked":         true,
         authentication_failure_close: true,
         per_consumer_qos:             true,
         "basic.nack":                 true,

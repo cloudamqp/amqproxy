@@ -201,4 +201,28 @@ describe AMQProxy::Server do
       s.stop_accepting_clients
     end
   end
+
+  it "passes connection blocked frames to clients" do
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
+    done = Channel(Nil).new
+    begin
+      spawn { s.listen("127.0.0.1", 5673) }
+      Fiber.yield
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        conn.on_blocked do
+          done.send nil
+          system("#{MAYBE_SUDO}rabbitmqctl set_vm_memory_high_watermark 0.8 > /dev/null").should be_true
+        end
+        conn.on_unblocked do
+          done.send nil
+        end
+        ch = conn.channel
+        system("#{MAYBE_SUDO}rabbitmqctl set_vm_memory_high_watermark 0.001 > /dev/null").should be_true
+        ch.basic_publish "foobar", "amq.fanout"
+        2.times { done.receive }
+      end
+    ensure
+      s.stop_accepting_clients
+    end
+  end
 end
