@@ -182,4 +182,23 @@ describe AMQProxy::Server do
     s.upstream_connections.should eq 1
     (Time.utc.to_unix - started).should be < 30
   end
+
+  it "works after server closes channel" do
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
+    begin
+      spawn { s.listen("127.0.0.1", 5673) }
+      Fiber.yield
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        qname = "test#{rand}"
+        3.times do
+          expect_raises(AMQP::Client::Channel::ClosedException) do
+            ch = conn.channel
+            ch.basic_consume(qname) { }
+          end
+        end
+      end
+    ensure
+      s.stop_accepting_clients
+    end
+  end
 end
