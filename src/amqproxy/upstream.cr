@@ -74,7 +74,7 @@ module AMQProxy
     end
 
     # Frames from upstream (to client)
-    private def read_loop(socket, remote_address : String) # ameba:disable Metrics/CyclomaticComplexity
+    private def read_loop(socket, remote_address : String)
       Log.context.set(remote_address: remote_address)
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
@@ -87,14 +87,7 @@ module AMQProxy
           end
           return
         when AMQ::Protocol::Frame::Connection::CloseOk then return
-        when AMQ::Protocol::Frame::Channel::OpenOk # we assume it always succeeds
-        when AMQ::Protocol::Frame::Channel::Close  # when upstream server requested a channel close
-          @channels_lock.synchronize do
-            @unsafe_channels.delete(frame.channel)
-            if downstream_channel = @channels.delete(frame.channel)
-              downstream_channel.write frame
-            end
-          end
+        when AMQ::Protocol::Frame::Channel::OpenOk  # we assume it always succeeds
         when AMQ::Protocol::Frame::Channel::CloseOk # when channel pool requested channel close
         else
           if downstream_channel = @channels[frame.channel]?
@@ -145,6 +138,11 @@ module AMQProxy
         @unsafe_channels.add(frame.channel)
       when AMQ::Protocol::Frame::Connection
         raise "Connection frames should not be sent through here: #{frame}"
+      when AMQ::Protocol::Frame::Channel::CloseOk # when upstream server requested a channel close and client confirmed
+        @channels_lock.synchronize do
+          @unsafe_channels.delete(frame.channel)
+          @channels.delete(frame.channel)
+        end
       when AMQ::Protocol::Frame::Channel
         raise "Channel frames should not be sent through here: #{frame}"
       end
