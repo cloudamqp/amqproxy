@@ -207,7 +207,7 @@ module AMQProxy
       case tune = AMQ::Protocol::Frame.from_io(@socket)
       when AMQ::Protocol::Frame::Connection::Tune
         channel_max = tune.channel_max.zero? ? UInt16::MAX : tune.channel_max
-        tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(channel_max, tune.frame_max, tune.heartbeat)
+        tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(channel_max, 4096, tune.heartbeat)
         @socket.write_bytes tune_ok, IO::ByteFormat::NetworkEndian
         @socket.flush
       when AMQ::Protocol::Frame::Connection::Close
