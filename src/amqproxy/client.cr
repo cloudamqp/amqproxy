@@ -77,11 +77,11 @@ module AMQProxy
         end
       end
     rescue ex : IO::EOFError
-      Log.debug { "Disconnected" }
+      Log.debug(exception: ex) { "Disconnected" }
     rescue ex : IO::Error
       Log.error(exception: ex) { "IO error" } unless socket.closed?
     rescue ex : Upstream::AccessError
-      Log.error { "Access refused, reason: #{ex.message}" }
+      Log.error(exception: ex) { "Access refused, reason: #{ex.message}" }
       close_connection(403_u16, ex.message || "ACCESS_REFUSED")
     rescue ex : Upstream::Error
       Log.error(exception: ex) { "Upstream error" }

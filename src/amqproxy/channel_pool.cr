@@ -54,7 +54,7 @@ module AMQProxy
           begin
             u.close "AMQProxy shutdown"
           rescue ex
-            Log.error { "Problem closing upstream: #{ex.inspect}" }
+            Log.error(exception: ex) { "Unable to close upstream connection" }
           end
         end
       end
@@ -70,7 +70,7 @@ module AMQProxy
               begin
                 u.close "Pooled connection closed due to inactivity"
               rescue ex
-                Log.error { "Problem closing upstream: #{ex.inspect}" }
+                Log.error(exception: ex) { "Unable to close upstream connection" }
               end
             elsif u.closed?
               Log.error { "Removing closed upstream connection from pool" }
