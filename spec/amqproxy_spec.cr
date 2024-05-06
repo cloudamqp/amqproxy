@@ -1,6 +1,32 @@
 require "./spec_helper"
 
 describe AMQProxy::Server do
+  it "dont reuse channels closed by upstream" do
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
+    begin
+      spawn { s.listen("127.0.0.1", 5673) }
+      Fiber.yield
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        ch = conn.channel
+        ch.basic_publish "foobar", "non-existing"
+      end
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        ch = conn.channel
+        ch.basic_publish_confirm "foobar", "amq.fanout"
+      end
+      AMQP::Client.start("amqp://localhost:5673") do |conn|
+        ch = conn.channel
+        expect_raises(AMQP::Client::Channel::ClosedException) do
+          ch.basic_publish_confirm "foobar", "non-existing"
+        end
+      end
+      sleep 0.1
+      s.upstream_connections.should eq 1
+    ensure
+      s.stop_accepting_clients
+    end
+  end
+
   it "keeps connections open" do
     s = AMQProxy::Server.new("127.0.0.1", 5672, false)
     begin

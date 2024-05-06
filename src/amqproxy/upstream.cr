@@ -13,6 +13,7 @@ module AMQProxy
     @channels_lock = Mutex.new
     @channel_max : UInt16
     @lock = Mutex.new
+    @remote_address : String
 
     def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials)
       tcp_socket = TCPSocket.new(@host, @port)
@@ -22,6 +23,7 @@ module AMQProxy
       tcp_socket.tcp_keepalive_count = 3
       tcp_socket.tcp_keepalive_interval = 10
       tcp_socket.tcp_nodelay = true
+      @remote_address = tcp_socket.remote_address.to_s
       @socket =
         if tls_ctx = @tls_ctx
           tls_socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host)
@@ -31,7 +33,6 @@ module AMQProxy
           tcp_socket
         end
       @channel_max = start(credentials)
-      spawn read_loop(@socket, tcp_socket.remote_address.to_s)
     end
 
     def open_channel_for(downstream_channel : DownstreamChannel) : UpstreamChannel
@@ -59,7 +60,7 @@ module AMQProxy
         if @unsafe_channels.delete channel
           send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
           @channels.delete channel
-        else
+        elsif @channels.has_key? channel
           @channels[channel] = nil # keep for reuse
         end
       end
@@ -74,8 +75,8 @@ module AMQProxy
     end
 
     # Frames from upstream (to client)
-    private def read_loop(socket, remote_address : String) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(remote_address: remote_address)
+    def read_loop(socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
+      Log.context.set(remote_address: @remote_address)
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
         when AMQ::Protocol::Frame::Heartbeat then send frame
@@ -92,6 +93,12 @@ module AMQProxy
           send_to_all_clients(frame)
         when AMQ::Protocol::Frame::Channel::OpenOk  # we assume it always succeeds
         when AMQ::Protocol::Frame::Channel::CloseOk # when channel pool requested channel close
+        when AMQ::Protocol::Frame::Channel::Close
+          send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+          @unsafe_channels.delete(frame.channel)
+          if downstream_channel = @channels.delete(frame.channel)
+            downstream_channel.write(frame)
+          end
         else
           if downstream_channel = @channels[frame.channel]?
             downstream_channel.write(frame)
