@@ -195,7 +195,6 @@ describe AMQProxy::Server do
           sleep 1
         end
       rescue ex
-        puts ex.message
         # ex.message.should be "Error reading socket: Connection reset by peer"
         wait_for_channel.send(4) # send 4
       end
