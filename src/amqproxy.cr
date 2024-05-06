@@ -13,7 +13,7 @@ class AMQProxy::CLI
   @term_timeout = 0
   @upstream = ENV["AMQP_URL"]?
 
-  def parse_config(path)
+  def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
     INI.parse(File.read(path)).each do |name, section|
       case name
       when "main", ""
