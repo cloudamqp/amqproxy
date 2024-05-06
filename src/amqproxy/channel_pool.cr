@@ -39,6 +39,10 @@ module AMQProxy
       upstream = Upstream.new(@host, @port, @tls_ctx, @credentials)
       Log.info { "Adding upstream connection" }
       @upstreams.unshift upstream
+      spawn do
+        upstream.read_loop
+        @upstreams.delete upstream
+      end
     rescue ex : IO::Error
       raise Upstream::Error.new ex.message, cause: ex
     end
