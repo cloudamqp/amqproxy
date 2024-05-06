@@ -10,7 +10,7 @@ class AMQProxy::CLI
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @log_level : Log::Severity = Log::Severity::Info
   @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
-  @term_timeout = 0
+  @term_timeout = -1
   @upstream = ENV["AMQP_URL"]?
 
   def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
@@ -91,7 +91,7 @@ class AMQProxy::CLI
         first_shutdown = false
         server.stop_accepting_clients
         server.disconnect_clients
-        if @term_timeout > 0
+        if @term_timeout >= 0
           spawn do
             sleep @term_timeout
             abort "Exiting with #{server.client_connections} client connections still open"
