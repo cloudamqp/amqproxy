@@ -112,8 +112,8 @@ module AMQProxy
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
       @outgoing_frames.send frame
-      rescue Channel::ClosedError
-        # do nothing
+    rescue Channel::ClosedError
+      # do nothing
     end
 
     def close_connection(code, text, frame = nil)
