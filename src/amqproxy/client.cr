@@ -67,6 +67,12 @@ module AMQProxy
           end
         end
         Fiber.yield if (i &+= 1) % 4096 == 0
+      rescue ex : Upstream::AccessError
+        Log.error { "Access refused, reason: #{ex.message}" }
+        close_connection(403_u16, ex.message || "ACCESS_REFUSED")
+      rescue ex : Upstream::Error
+        Log.error(exception: ex) { "Upstream error" }
+        close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
       rescue IO::TimeoutError
         time_since_last_heartbeat = (Time.monotonic - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
         if time_since_last_heartbeat <= 1 + @heartbeat                                    # add 1s grace because of rounding
@@ -77,16 +83,8 @@ module AMQProxy
           return
         end
       end
-    rescue ex : IO::EOFError
-      Log.debug { "Disconnected" }
     rescue ex : IO::Error
-      Log.error(exception: ex) { "IO error" } unless socket.closed?
-    rescue ex : Upstream::AccessError
-      Log.error { "Access refused, reason: #{ex.message}" }
-      close_connection(403_u16, ex.message || "ACCESS_REFUSED")
-    rescue ex : Upstream::Error
-      Log.error(exception: ex) { "Upstream error" }
-      close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
+      Log.debug { "Disconnected #{ex.inspect}" }
     else
       Log.debug { "Disconnected" }
     ensure
@@ -133,6 +131,7 @@ module AMQProxy
       @channel_map.each_value do |upstream_channel|
         upstream_channel.unassign
       rescue Upstream::WriteError
+        Log.debug { "Upstream write error while closing client's channels" }
         next # Nothing to do
       end
       @channel_map.clear

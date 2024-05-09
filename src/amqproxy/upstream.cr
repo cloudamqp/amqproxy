@@ -112,7 +112,7 @@ module AMQProxy
         Fiber.yield if (i &+= 1) % 4096 == 0
       end
     rescue ex : IO::Error | OpenSSL::SSL::Error
-      Log.error(exception: ex) { "Error reading from upstream" } unless socket.closed?
+      Log.info { "Connection error #{ex.inspect}" } unless socket.closed?
     ensure
       socket.close rescue nil
       close_all_client_channels
