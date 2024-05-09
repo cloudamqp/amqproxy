@@ -77,7 +77,7 @@ module AMQProxy
     # Frames from upstream (to client)
     def read_loop(socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
       Log.context.set(remote_address: @remote_address)
-      i = 0
+      i = 0u64
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
         when AMQ::Protocol::Frame::Heartbeat then send frame
@@ -109,7 +109,7 @@ module AMQProxy
               "DOWNSTREAM_DISCONNECTED", 0_u16, 0_u16)
           end
         end
-        Fiber.yield if (i &+= 1) % 32768 == 0
+        Fiber.yield if (i &+= 1) % 4096 == 0
       end
     rescue ex : IO::Error | OpenSSL::SSL::Error
       Log.error(exception: ex) { "Error reading from upstream" } unless socket.closed?

@@ -28,7 +28,7 @@ module AMQProxy
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
       Log.context.set(remote_address: socket.remote_address.to_s)
       Log.debug { "Connected" }
-      i = 0
+      i = 0u64
       socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
@@ -66,7 +66,7 @@ module AMQProxy
             close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           end
         end
-        Fiber.yield if (i &+= 1) % 32768 == 0
+        Fiber.yield if (i &+= 1) % 4096 == 0
       rescue IO::TimeoutError
         time_since_last_heartbeat = (Time.monotonic - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
         if time_since_last_heartbeat <= 1 + @heartbeat                                    # add 1s grace because of rounding
