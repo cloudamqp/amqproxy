@@ -59,10 +59,6 @@ module AMQProxy
       @channels.size
     end
 
-    def active_channels
-      @channels.size
-    end
-
     # Frames from upstream (to client)
     def read_loop(socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
       Log.context.set(remote_address: @remote_address)

@@ -70,7 +70,7 @@ module AMQProxy
         @lock.synchronize do
           (@upstreams.size - 1).times do # leave at least one connection
             u = @upstreams.pop
-            if u.active_channels.zero?
+            if u.channels.zero?
               begin
                 u.close "Pooled connection closed due to inactivity"
               rescue ex
