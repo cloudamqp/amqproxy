@@ -52,7 +52,7 @@ module AMQProxy
         send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
       end
     rescue ex : IO::Error | OpenSSL::SSL::Error
-      Log.debug(exception: ex) { "Error while closing upstream channel #{id}" }
+      Log.debug(exception: ex) { "Error while closing upstream channel #{channel}" }
     end
 
     def channels
