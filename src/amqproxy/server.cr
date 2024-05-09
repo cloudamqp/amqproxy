@@ -67,7 +67,8 @@ module AMQProxy
       end
     rescue ex # only raise from constructor, when negotating
       Log.debug { "Client connection failure (#{remote_address}) #{ex.inspect}" }
-      socket.close
+    ensure
+      socket.close rescue nil
     end
 
     private def active_client(client, &)

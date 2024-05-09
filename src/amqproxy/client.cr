@@ -8,7 +8,7 @@ module AMQProxy
   class Client
     Log = ::Log.for(self)
     getter credentials : Credentials
-    @channel_map = Hash(UInt16, UpstreamChannel).new
+    @channel_map = Hash(UInt16, UpstreamChannel?).new
     @outgoing_frames = Channel(AMQ::Protocol::Frame).new(128)
     @frame_max : UInt32
     @channel_max : UInt16
@@ -28,6 +28,7 @@ module AMQProxy
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
       Log.context.set(remote_address: socket.remote_address.to_s)
       Log.debug { "Connected" }
+      i = 0u64
       socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
@@ -49,7 +50,7 @@ module AMQProxy
           end
           write AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
         when AMQ::Protocol::Frame::Channel::CloseOk
-          # CloseOk already sent in Upstream#read_loop
+          # CloseOk reply to server is already sent in Upstream#read_loop
           @channel_map.delete(frame.channel)
         when frame.channel.zero?
           Log.error { "Unexpected connection frame: #{frame}" }
@@ -57,14 +58,24 @@ module AMQProxy
         else
           src_channel = frame.channel
           begin
-            upstream_channel = @channel_map[frame.channel]
-            upstream_channel.write(frame)
+            if upstream_channel = @channel_map[frame.channel]
+              upstream_channel.write(frame)
+            else
+              # Channel::Close is sent, waiting for CloseOk
+            end
           rescue ex : Upstream::WriteError
             close_channel(src_channel)
           rescue KeyError
             close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           end
         end
+        Fiber.yield if (i &+= 1) % 4096 == 0
+      rescue ex : Upstream::AccessError
+        Log.error { "Access refused, reason: #{ex.message}" }
+        close_connection(403_u16, ex.message || "ACCESS_REFUSED")
+      rescue ex : Upstream::Error
+        Log.error(exception: ex) { "Upstream error" }
+        close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
       rescue IO::TimeoutError
         time_since_last_heartbeat = (Time.monotonic - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
         if time_since_last_heartbeat <= 1 + @heartbeat                                    # add 1s grace because of rounding
@@ -75,16 +86,8 @@ module AMQProxy
           return
         end
       end
-    rescue ex : IO::EOFError
-      Log.debug { "Disconnected" }
     rescue ex : IO::Error
-      Log.error(exception: ex) { "IO error" } unless socket.closed?
-    rescue ex : Upstream::AccessError
-      Log.error { "Access refused, reason: #{ex.message}" }
-      close_connection(403_u16, ex.message || "ACCESS_REFUSED")
-    rescue ex : Upstream::Error
-      Log.error(exception: ex) { "Upstream error" }
-      close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
+      Log.debug { "Disconnected #{ex.inspect}" }
     else
       Log.debug { "Disconnected" }
     ensure
@@ -100,7 +103,7 @@ module AMQProxy
         break if frame.is_a? AMQ::Protocol::Frame::Connection::CloseOk
       end
     rescue ex : IO::Error
-      raise ex unless socket.closed?
+      # Client closed connection, suppress error
     ensure
       @outgoing_frames.close
       socket.close rescue nil
@@ -110,6 +113,8 @@ module AMQProxy
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
       @outgoing_frames.send frame
+    rescue Channel::ClosedError
+      # do nothing
     end
 
     def close_connection(code, text, frame = nil)
@@ -123,12 +128,14 @@ module AMQProxy
 
     def close_channel(id)
       write AMQ::Protocol::Frame::Channel::Close.new(id, 500_u16, "UPSTREAM_DISCONNECTED", 0_u16, 0_u16)
+      @channel_map[id] = nil
     end
 
     private def close_all_upstream_channels
       @channel_map.each_value do |upstream_channel|
-        upstream_channel.unassign
+        upstream_channel.try &.unassign
       rescue Upstream::WriteError
+        Log.debug { "Upstream write error while closing client's channels" }
         next # Nothing to do
       end
       @channel_map.clear

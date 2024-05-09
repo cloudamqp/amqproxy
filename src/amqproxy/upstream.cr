@@ -8,8 +8,7 @@ module AMQProxy
   class Upstream
     Log = ::Log.for(self)
     @socket : IO
-    @unsafe_channels = Set(UInt16).new
-    @channels = Hash(UInt16, DownstreamChannel?).new
+    @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
     @channel_max : UInt16
     @lock = Mutex.new
@@ -38,14 +37,7 @@ module AMQProxy
     def open_channel_for(downstream_channel : DownstreamChannel) : UpstreamChannel
       @channels_lock.synchronize do
         1_u16.upto(@channel_max) do |i|
-          if @channels.has_key?(i)
-            if @channels[i].nil?
-              @channels[i] = downstream_channel
-              return UpstreamChannel.new(self, i) # reuse
-            else
-              next # in use
-            end
-          else
+          unless @channels.has_key?(i)
             @channels[i] = downstream_channel
             send AMQ::Protocol::Frame::Channel::Open.new(i)
             return UpstreamChannel.new(self, i)
@@ -56,27 +48,21 @@ module AMQProxy
     end
 
     def unassign_channel(channel : UInt16)
-      @channels_lock.synchronize do
-        if @unsafe_channels.delete channel
-          send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
-          @channels.delete channel
-        elsif @channels.has_key? channel
-          @channels[channel] = nil # keep for reuse
-        end
+      if @channels_lock.synchronize { @channels.delete(channel) }
+        send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
       end
+    rescue ex : IO::Error | OpenSSL::SSL::Error
+      Log.debug(exception: ex) { "Error while closing upstream channel #{channel}" }
     end
 
     def channels
       @channels.size
     end
 
-    def active_channels
-      @channels.count { |_, v| !v.nil? }
-    end
-
     # Frames from upstream (to client)
     def read_loop(socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
       Log.context.set(remote_address: @remote_address)
+      i = 0u64
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
         when AMQ::Protocol::Frame::Heartbeat then send frame
@@ -95,7 +81,6 @@ module AMQProxy
         when AMQ::Protocol::Frame::Channel::CloseOk # when channel pool requested channel close
         when AMQ::Protocol::Frame::Channel::Close
           send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-          @unsafe_channels.delete(frame.channel)
           if downstream_channel = @channels.delete(frame.channel)
             downstream_channel.write(frame)
           end
@@ -108,9 +93,10 @@ module AMQProxy
               "DOWNSTREAM_DISCONNECTED", 0_u16, 0_u16)
           end
         end
+        Fiber.yield if (i &+= 1) % 4096 == 0
       end
     rescue ex : IO::Error | OpenSSL::SSL::Error
-      Log.error(exception: ex) { "Error reading from upstream" } unless socket.closed?
+      Log.info { "Connection error #{ex.inspect}" } unless socket.closed?
     ensure
       socket.close rescue nil
       close_all_client_channels
@@ -121,16 +107,12 @@ module AMQProxy
     end
 
     private def close_all_client_channels
-      Log.debug { "Closing all client channels for closed upstream" }
       @channels_lock.synchronize do
-        cnt = 0
+        return if @channels.empty?
+        Log.debug { "Upstream connection closed, closing #{@channels.size} client channels" }
         @channels.each_value do |downstream_channel|
-          if dch = downstream_channel
-            dch.close
-            cnt += 1
-          end
+          downstream_channel.close
         end
-        Log.debug { "Upstream connection closed, closing #{cnt} client channels" } unless cnt.zero?
         @channels.clear
       end
     end
@@ -140,9 +122,7 @@ module AMQProxy
       clients = Set(Client).new
       @channels_lock.synchronize do
         @channels.each_value do |downstream_channel|
-          if dc = downstream_channel
-            clients << dc.client
-          end
+          clients << downstream_channel.client
         end
       end
       clients.each do |client|
@@ -153,19 +133,10 @@ module AMQProxy
     # Forward frames from client to upstream
     def write(frame : AMQ::Protocol::Frame) : Nil
       case frame
-      when AMQ::Protocol::Frame::Basic::Publish,
-           AMQ::Protocol::Frame::Basic::Qos
-      when AMQ::Protocol::Frame::Basic::Get
-        @unsafe_channels.add(frame.channel) unless frame.no_ack
-      when AMQ::Protocol::Frame::Basic,
-           AMQ::Protocol::Frame::Confirm,
-           AMQ::Protocol::Frame::Tx
-        @unsafe_channels.add(frame.channel)
       when AMQ::Protocol::Frame::Connection
         raise "Connection frames should not be sent through here: #{frame}"
       when AMQ::Protocol::Frame::Channel::CloseOk # when upstream server requested a channel close and client confirmed
         @channels_lock.synchronize do
-          @unsafe_channels.delete(frame.channel)
           @channels.delete(frame.channel)
         end
       when AMQ::Protocol::Frame::Channel
