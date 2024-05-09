@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.0-rc.3] - 2024-04-09
+
+- Never reuse channels, even publish only channels are not safe if not all publish frames for a message was sent before the client disconnected
+- Don't log normal client disconnect errors
+- Don't allow busy connection to dominate, Fiber.yield every 4k msgs
+- --term-timout support, wait X seconds after signal TERM and then forefully close remaining connections
+- Always negotate 4096 frame_max size, as that's the minimum all clients support
+
 ## [v2.0.0-rc.2] - 2024-03-09
 
 - Heartbeat support on the client side
