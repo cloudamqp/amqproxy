@@ -48,12 +48,11 @@ module AMQProxy
     end
 
     def unassign_channel(channel : UInt16)
-      @channels_lock.synchronize do
-        if @channels.has_key? channel
-          send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
-          @channels.delete channel
-        end
+      if @channels_lock.synchronize { @channels.delete(channel) }
+        send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
       end
+    rescue ex : IO::Error | OpenSSL::SSL::Error
+      Log.debug(exception: ex) { "Error while closing upstream channel #{id}" }
     end
 
     def channels
