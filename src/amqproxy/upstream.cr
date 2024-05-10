@@ -79,19 +79,13 @@ module AMQProxy
              AMQ::Protocol::Frame::Connection::Unblocked
           send_to_all_clients(frame)
         when AMQ::Protocol::Frame::Channel::OpenOk  # we assume it always succeeds
-        when AMQ::Protocol::Frame::Channel::CloseOk # when channel pool requested channel close
-        when AMQ::Protocol::Frame::Channel::Close
-          send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-          if downstream_channel = @channels.delete(frame.channel)
-            downstream_channel.write(frame)
-          end
+        when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
+          @channels_lock.synchronize { @channels.delete(frame.channel) }
         else
-          if downstream_channel = @channels[frame.channel]?
+          if downstream_channel = @channels_lock.synchronize { @channels[frame.channel]? }
             downstream_channel.write(frame)
           else
             Log.debug { "Frame for unmapped channel from upstream: #{frame}" }
-            send AMQ::Protocol::Frame::Channel::Close.new(frame.channel, 500_u16,
-              "DOWNSTREAM_DISCONNECTED", 0_u16, 0_u16)
           end
         end
         Fiber.yield if (i &+= 1) % 4096 == 0
