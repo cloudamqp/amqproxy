@@ -7,7 +7,7 @@ require "./channel_pool"
 module AMQProxy
   class Upstream
     Log      = ::Log.for(self)
-    FrameMax = 4096
+    FrameMax = 4096_u32
     @socket : IO
     @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
