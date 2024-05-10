@@ -24,6 +24,27 @@ module AMQProxy
       spawn write_loop
     end
 
+    # Keep a buffer of publish frames
+    # Only send to upstream when the full message is received
+    @next_publish : AMQ::Protocol::Frame::Basic::Publish?
+    @next_header : AMQ::Protocol::Frame::Header?
+    @next_bodies = Array(AMQ::Protocol::Frame::BytesBody).new
+
+    private def finish_publish(channel)
+      next_publish = @next_publish.not_nil!("Missing Basic.Publish frame")
+      next_header = @next_header.not_nil!("Missing Header frame")
+      if upstream_channel = @channel_map[channel]
+        upstream_channel.write(next_publish)
+        upstream_channel.write(next_header)
+        @next_bodies.each do |body|
+          upstream_channel.write(body)
+        end
+      end
+    ensure
+      @next_publish = @next_header = nil
+      @next_bodies.clear
+    end
+
     # frames from enduser
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
       Log.context.set(remote_address: socket.remote_address.to_s)
@@ -45,9 +66,19 @@ module AMQProxy
           @channel_map[frame.channel] = upstream_channel
           write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
         when AMQ::Protocol::Frame::Channel::CloseOk
-          # Server closed channel
-          # CloseOk reply to server is already sent in Upstream#read_loop
+          # Server closed channel, CloseOk reply to server is already sent
           @channel_map.delete(frame.channel)
+        when AMQ::Protocol::Frame::Basic::Publish
+          @next_publish = frame
+        when AMQ::Protocol::Frame::Header
+          @next_header = frame
+          finish_publish(frame.channel) if frame.body_size.zero?
+        when AMQ::Protocol::Frame::BytesBody
+          @next_bodies << frame
+          if @next_header.not_nil!("Missing Header frame").body_size ==
+               @next_bodies.sum &.body_size
+            finish_publish(frame.channel)
+          end
         when frame.channel.zero?
           Log.error { "Unexpected connection frame: #{frame}" }
           close_connection(540_u16, "NOT_IMPLEMENTED", frame)
