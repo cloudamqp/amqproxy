@@ -103,7 +103,6 @@ module AMQProxy
     ensure
       @outgoing_frames.close
       socket.close rescue nil
-      close_all_upstream_channels
     end
 
     # Send frame to client, channel id should already be remapped by the caller
