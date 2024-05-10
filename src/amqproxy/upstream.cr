@@ -97,7 +97,7 @@ module AMQProxy
       @socket.closed?
     end
 
-    private def close_all_client_channels(code = 500, reason = "UPSTREAM_ERROR")
+    private def close_all_client_channels(code = 500_u16, reason = "UPSTREAM_ERROR")
       @channels_lock.synchronize do
         return if @channels.empty?
         Log.debug { "Upstream connection closed, closing #{@channels.size} client channels" }

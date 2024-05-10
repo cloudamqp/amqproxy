@@ -60,7 +60,7 @@ module AMQProxy
               # Channel::Close is sent, waiting for CloseOk
             end
           rescue ex : Upstream::WriteError
-            close_channel(src_channel)
+            close_channel(src_channel, 500_u16, "UPSTREAM_ERROR")
           rescue KeyError
             close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           end
@@ -126,7 +126,7 @@ module AMQProxy
       @channel_map[id] = nil
     end
 
-    private def close_all_upstream_channels(code = 500, reason = "CLIENT_DISCONNECTED")
+    private def close_all_upstream_channels(code = 500_u16, reason = "CLIENT_DISCONNECTED")
       @channel_map.each_value do |upstream_channel|
         upstream_channel.try &.close(code, reason)
       rescue Upstream::WriteError
