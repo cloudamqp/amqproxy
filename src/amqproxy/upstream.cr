@@ -6,7 +6,8 @@ require "./channel_pool"
 
 module AMQProxy
   class Upstream
-    Log = ::Log.for(self)
+    Log      = ::Log.for(self)
+    FrameMax = 4096
     @socket : IO
     @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
@@ -143,11 +144,23 @@ module AMQProxy
     private def send(frame : AMQ::Protocol::Frame) : Nil
       @lock.synchronize do
         @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
-        @socket.flush
+        @socket.flush unless expect_more_publish_frames?(frame)
       rescue ex : IO::Error | OpenSSL::SSL::Error
         @socket.close rescue nil
         raise WriteError.new "Error writing to upstream", ex
       end
+    end
+
+    private def expect_more_publish_frames?(frame) : Bool
+      case frame
+      when AMQ::Protocol::Frame::Basic::Publish
+        return true
+      when AMQ::Protocol::Frame::Header
+        return true unless frame.body_size.zero?
+      when AMQ::Protocol::Frame::BytesBody
+        return true if frame.bytesize == FrameMax
+      end
+      false
     end
 
     def close(reason = "")
@@ -180,7 +193,7 @@ module AMQProxy
       case tune = AMQ::Protocol::Frame.from_io(@socket)
       when AMQ::Protocol::Frame::Connection::Tune
         channel_max = tune.channel_max.zero? ? UInt16::MAX : tune.channel_max
-        tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(channel_max, 4096, tune.heartbeat)
+        tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(channel_max, FrameMax, tune.heartbeat)
         @socket.write_bytes tune_ok, IO::ByteFormat::NetworkEndian
         @socket.flush
       when AMQ::Protocol::Frame::Connection::Close
