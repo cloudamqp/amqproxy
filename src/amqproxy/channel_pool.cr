@@ -40,8 +40,11 @@ module AMQProxy
       Log.info { "Adding upstream connection" }
       @upstreams.unshift upstream
       spawn do
-        upstream.read_loop
-        @upstreams.delete upstream
+        begin
+          upstream.read_loop
+        ensure
+          @upstreams.delete upstream
+        end
       end
     rescue ex : IO::Error
       raise Upstream::Error.new ex.message, cause: ex
