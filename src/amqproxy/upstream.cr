@@ -74,7 +74,12 @@ module AMQProxy
         when AMQ::Protocol::Frame::Connection::Blocked,
              AMQ::Protocol::Frame::Connection::Unblocked
           send_to_all_clients(frame)
-        when AMQ::Protocol::Frame::Channel::OpenOk  # we assume it always succeeds
+        when AMQ::Protocol::Frame::Channel::OpenOk # assume it always succeeds
+        when AMQ::Protocol::Frame::Channel::Close
+          send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+          if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
+            downstream_channel.write frame
+          end
         when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
           @channels_lock.synchronize { @channels.delete(frame.channel) }
         else

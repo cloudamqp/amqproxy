@@ -107,6 +107,10 @@ module AMQProxy
 
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
+      case frame
+      when AMQ::Protocol::Frame::Channel::Close
+        @channel_map[frame.channel] = nil
+      end
       @outgoing_frames.send frame
     rescue Channel::ClosedError
       # do nothing
@@ -123,7 +127,6 @@ module AMQProxy
 
     def close_channel(id, code, reason)
       write AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
-      @channel_map[id] = nil
     end
 
     private def close_all_upstream_channels(code = 500_u16, reason = "CLIENT_DISCONNECTED")
