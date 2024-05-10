@@ -67,6 +67,7 @@ module AMQProxy
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
         when AMQ::Protocol::Frame::Heartbeat then send frame
         when AMQ::Protocol::Frame::Connection::Close
+          Log.error { "Upstream closed connection: #{frame.reply_text} #{frame.reply_code}" }
           close_all_client_channels
           begin
             send AMQ::Protocol::Frame::Connection::CloseOk.new
