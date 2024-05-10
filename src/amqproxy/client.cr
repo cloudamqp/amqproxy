@@ -44,12 +44,8 @@ module AMQProxy
           upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
           @channel_map[frame.channel] = upstream_channel
           write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
-        when AMQ::Protocol::Frame::Channel::Close
-          if upstream_channel = @channel_map.delete(frame.channel)
-            upstream_channel.unassign
-          end
-          write AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
         when AMQ::Protocol::Frame::Channel::CloseOk
+          # Server closed channel
           # CloseOk reply to server is already sent in Upstream#read_loop
           @channel_map.delete(frame.channel)
         when frame.channel.zero?
