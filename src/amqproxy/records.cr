@@ -8,8 +8,8 @@ module AMQProxy
       @upstream.write frame
     end
 
-    def unassign
-      @upstream.unassign_channel(@channel)
+    def close(code, reason)
+      @upstream.close_channel(@channel, code, reason)
     end
   end
 
@@ -19,8 +19,8 @@ module AMQProxy
       @client.write(frame)
     end
 
-    def close
-      @client.close_channel(@channel)
+    def close(code, reason)
+      @client.close_channel(@channel, code, reason)
     end
   end
 

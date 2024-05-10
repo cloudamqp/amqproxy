@@ -47,12 +47,8 @@ module AMQProxy
       end
     end
 
-    def unassign_channel(channel : UInt16)
-      if @channels_lock.synchronize { @channels.delete(channel) }
-        send AMQ::Protocol::Frame::Channel::Close.new(channel, 0u16, "", 0u16, 0u16)
-      end
-    rescue ex : IO::Error | OpenSSL::SSL::Error
-      Log.debug(exception: ex) { "Error while closing upstream channel #{channel}" }
+    def close_channel(id, code, reason)
+      send AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
     end
 
     def channels
@@ -68,7 +64,7 @@ module AMQProxy
         when AMQ::Protocol::Frame::Heartbeat then send frame
         when AMQ::Protocol::Frame::Connection::Close
           Log.error { "Upstream closed connection: #{frame.reply_text} #{frame.reply_code}" }
-          close_all_client_channels
+          close_all_client_channels(frame.reply_code, frame.reply_text)
           begin
             send AMQ::Protocol::Frame::Connection::CloseOk.new
           rescue WriteError
@@ -101,12 +97,12 @@ module AMQProxy
       @socket.closed?
     end
 
-    private def close_all_client_channels
+    private def close_all_client_channels(code = 500, reason = "UPSTREAM_ERROR")
       @channels_lock.synchronize do
         return if @channels.empty?
         Log.debug { "Upstream connection closed, closing #{@channels.size} client channels" }
         @channels.each_value do |downstream_channel|
-          downstream_channel.close
+          downstream_channel.close(code, reason)
         end
         @channels.clear
       end

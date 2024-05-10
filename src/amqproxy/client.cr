@@ -36,7 +36,7 @@ module AMQProxy
           @last_heartbeat = Time.monotonic
         when AMQ::Protocol::Frame::Connection::CloseOk then return
         when AMQ::Protocol::Frame::Connection::Close
-          close_all_upstream_channels
+          close_all_upstream_channels(frame.reply_code, frame.reply_text)
           write AMQ::Protocol::Frame::Connection::CloseOk.new
           return
         when AMQ::Protocol::Frame::Channel::Open
@@ -122,14 +122,14 @@ module AMQProxy
       end
     end
 
-    def close_channel(id)
-      write AMQ::Protocol::Frame::Channel::Close.new(id, 500_u16, "UPSTREAM_DISCONNECTED", 0_u16, 0_u16)
+    def close_channel(id, code, reason)
+      write AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
       @channel_map[id] = nil
     end
 
-    private def close_all_upstream_channels
+    private def close_all_upstream_channels(code = 500, reason = "CLIENT_DISCONNECTED")
       @channel_map.each_value do |upstream_channel|
-        upstream_channel.try &.unassign
+        upstream_channel.try &.close(code, reason)
       rescue Upstream::WriteError
         Log.debug { "Upstream write error while closing client's channels" }
         next # Nothing to do
