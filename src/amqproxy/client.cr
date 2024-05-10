@@ -126,6 +126,7 @@ module AMQProxy
       Log.debug { "Disconnected" }
     ensure
       @outgoing_frames.close
+      socket.close rescue nil
       close_all_upstream_channels
     end
 
