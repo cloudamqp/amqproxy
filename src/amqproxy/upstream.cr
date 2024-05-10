@@ -130,12 +130,11 @@ module AMQProxy
       case frame
       when AMQ::Protocol::Frame::Connection
         raise "Connection frames should not be sent through here: #{frame}"
-      when AMQ::Protocol::Frame::Channel::CloseOk # when upstream server requested a channel close and client confirmed
+      when AMQ::Protocol::Frame::Channel::CloseOk
+        # when upstream server requested a channel close and client confirmed
         @channels_lock.synchronize do
           @channels.delete(frame.channel)
         end
-      when AMQ::Protocol::Frame::Channel
-        raise "Channel frames should not be sent through here: #{frame}"
       end
       send frame
     end
