@@ -82,7 +82,9 @@ module AMQProxy
             downstream_channel.write frame
           end
         when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
-          @channels_lock.synchronize { @channels.delete(frame.channel) }
+          if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
+            downstream_channel.write(frame)
+          end
         else
           if downstream_channel = @channels_lock.synchronize { @channels[frame.channel]? }
             downstream_channel.write(frame)

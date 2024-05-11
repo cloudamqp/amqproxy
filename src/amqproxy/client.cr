@@ -134,8 +134,14 @@ module AMQProxy
       while frame = @outgoing_frames.receive?
         socket.write_bytes frame, IO::ByteFormat::NetworkEndian
         socket.flush unless expect_more_publish_frames?(frame)
-
-        break if frame.is_a? AMQ::Protocol::Frame::Connection::CloseOk
+        case frame
+        when AMQ::Protocol::Frame::Channel::Close
+          @channel_map[frame.channel] = nil
+        when AMQ::Protocol::Frame::Channel::CloseOk
+          @channel_map.delete(frame.channel)
+        when AMQ::Protocol::Frame::Connection::CloseOk
+          break
+        end
       end
     rescue ex : IO::Error
       # Client closed connection, suppress error
@@ -146,10 +152,6 @@ module AMQProxy
 
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
-      case frame
-      when AMQ::Protocol::Frame::Channel::Close
-        @channel_map[frame.channel] = nil
-      end
       @outgoing_frames.send frame
     rescue Channel::ClosedError
       # do nothing
