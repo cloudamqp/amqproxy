@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.0-rc.5] - 2024-04-11
+
+- Bugfix: negotiate frame_max 4096 for downstream clients
+
 ## [v2.0.0-rc.4] - 2024-04-11
 
 - Bufix: Only send channel.close once, and gracefully wait for closeok
