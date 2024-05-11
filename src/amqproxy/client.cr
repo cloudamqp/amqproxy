@@ -242,7 +242,7 @@ module AMQProxy
       else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
       end
 
-      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: UInt16::MAX, heartbeat: 0_u16)
+      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 4096_u32, channel_max: UInt16::MAX, heartbeat: 0_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
