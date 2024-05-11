@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.0-rc.4] - 2024-04-11
+
+- Bufix: Only send channel.close once, and gracefully wait for closeok
+- Buffer publish frames and only send full publishes as RabbitMQ doesn't support channel.close in the middle of a publish frame sequence
+- Optimization: only flush socket buffer after a full publish sequence, not for each frame
+
 ## [v2.0.0-rc.3] - 2024-04-09
 
 - Never reuse channels, even publish only channels are not safe if not all publish frames for a message was sent before the client disconnected
