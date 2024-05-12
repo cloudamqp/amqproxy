@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.0-rc.8] - 2024-04-12
+
+- Allow large client frame sizes, but split body frames to client if smaller than upstream frame size, to support large Header frames
+
 ## [v2.0.0-rc.7] - 2024-04-12
 
 - Send all GetOk response frames in one TCP packet
