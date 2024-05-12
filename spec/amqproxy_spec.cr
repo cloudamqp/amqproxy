@@ -267,4 +267,21 @@ describe AMQProxy::Server do
       s.stop_accepting_clients
     end
   end
+
+  it "supports publishing large messages when frame_max is small" do
+    s = AMQProxy::Server.new("127.0.0.1", 5672, false)
+    begin
+      spawn { s.listen("127.0.0.1", 5673) }
+      Fiber.yield
+      AMQP::Client.start("amqp://localhost:5673?frame_max=4096") do |conn|
+        ch = conn.channel
+        q = ch.queue
+        q.publish_confirm Bytes.new(200_000)
+        msg = q.get.not_nil!("should not be nil")
+        msg.body_io.bytesize.should eq 200_000
+      end
+    ensure
+      s.stop_accepting_clients
+    end
+  end
 end

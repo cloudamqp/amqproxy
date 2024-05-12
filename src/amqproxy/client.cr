@@ -131,7 +131,19 @@ module AMQProxy
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
       @lock.synchronize do
-        @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
+        case frame
+        when AMQ::Protocol::Frame::BytesBody
+          # Upstream might send large frames, split them to support lower client frame_max
+          pos = 0u32
+          while pos < frame.body_size
+            len = Math.min(@frame_max - 8, frame.body_size - pos)
+            body_part = AMQ::Protocol::Frame::BytesBody.new(frame.channel, len, frame.body[pos, len])
+            @socket.write_bytes body_part, IO::ByteFormat::NetworkEndian
+            pos += len
+          end
+        else
+          @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
+        end
         @socket.flush unless expect_more_frames?(frame)
       end
       case frame
@@ -176,7 +188,6 @@ module AMQProxy
       when AMQ::Protocol::Frame::Basic::Return  then true
       when AMQ::Protocol::Frame::Basic::GetOk   then true
       when AMQ::Protocol::Frame::Header         then frame.body_size != 0
-      when AMQ::Protocol::Frame::Body           then frame.bytesize == @frame_max
       else                                           false
       end
     end
@@ -235,7 +246,7 @@ module AMQProxy
       else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
       end
 
-      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 4096_u32, channel_max: UInt16::MAX, heartbeat: 0_u16)
+      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: UInt16::MAX, heartbeat: 0_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
