@@ -173,6 +173,7 @@ module AMQProxy
     private def expect_more_publish_frames?(frame) : Bool
       case frame
       when AMQ::Protocol::Frame::Basic::Publish then true
+      when AMQ::Protocol::Frame::Basic::GetOk   then true
       when AMQ::Protocol::Frame::Header         then frame.body_size != 0
       when AMQ::Protocol::Frame::Body           then frame.bytesize == @frame_max
       else                                           false
