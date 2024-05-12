@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.0-rc.7] - 2024-04-12
+
+- Send all GetOk response frames in one TCP packet
+
 ## [v2.0.0-rc.6] - 2024-04-11
 
 - Bugfix: Send Connection.Close-ok to client before closing TCP socket
