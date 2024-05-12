@@ -132,7 +132,7 @@ module AMQProxy
     def write(frame : AMQ::Protocol::Frame)
       @lock.synchronize do
         @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
-        @socket.flush unless expect_more_publish_frames?(frame)
+        @socket.flush unless expect_more_frames?(frame)
       end
       case frame
       when AMQ::Protocol::Frame::Channel::Close
@@ -170,9 +170,10 @@ module AMQProxy
       @channel_map.clear
     end
 
-    private def expect_more_publish_frames?(frame) : Bool
+    private def expect_more_frames?(frame) : Bool
       case frame
-      when AMQ::Protocol::Frame::Basic::Publish then true
+      when AMQ::Protocol::Frame::Basic::Deliver then true
+      when AMQ::Protocol::Frame::Basic::Return  then true
       when AMQ::Protocol::Frame::Basic::GetOk   then true
       when AMQ::Protocol::Frame::Header         then frame.body_size != 0
       when AMQ::Protocol::Frame::Body           then frame.bytesize == @frame_max
