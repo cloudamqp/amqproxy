@@ -27,7 +27,7 @@ sudo apt-get install amqproxy
 ```
 
 If you need to install a specific version, do so using the following command:
-`sudo apt install lavinmq=<version>`. This works for both upgrades and downgrades.
+`sudo apt install amqproxy=<version>`. This works for both upgrades and downgrades.
 
 ### Docker/Podman
 
