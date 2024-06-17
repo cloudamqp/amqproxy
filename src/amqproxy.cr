@@ -83,7 +83,7 @@ class AMQProxy::CLI
                   end
     Log.setup_from_env(default_level: @log_level, backend: log_backend)
 
-    server = AMQProxy::Server.new(u.host || "", port, tls, @idle_connection_timeout)
+    server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
 
     first_shutdown = true
     shutdown = ->(_s : Signal) do
