@@ -9,34 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v2.0.0] - 2024-06-17
 
+- Main difference against v1.x is that channels are pooled, multiple client channels are shared on a single upstream connection, dramatically decreasing the number of upstream connections needed
 - IPv6 addresses in brackets supported in upstream URL (eg. amqp://[::1])
 - Otherwise unchanged from v2.0.0-rc.8
-- Main difference against v1.x is that channels are pooled, multiple client channels are shared on a single upstream connection, dramatically decreasing the number of upstream connections needed
 
-## [v2.0.0-rc.8] - 2024-04-12
+## [v2.0.0-rc.8] - 2024-05-12
 
 - Allow large client frame sizes, but split body frames to client if smaller than upstream frame size, to support large Header frames
 
-## [v2.0.0-rc.7] - 2024-04-12
+## [v2.0.0-rc.7] - 2024-05-12
 
 - Send all GetOk response frames in one TCP packet
 
-## [v2.0.0-rc.6] - 2024-04-11
+## [v2.0.0-rc.6] - 2024-05-11
 
 - Bugfix: Send Connection.Close-ok to client before closing TCP socket
 - Bugfix: Pass Channel.Close-ok down to client
 
-## [v2.0.0-rc.5] - 2024-04-11
+## [v2.0.0-rc.5] - 2024-05-11
 
 - Bugfix: negotiate frame_max 4096 for downstream clients
 
-## [v2.0.0-rc.4] - 2024-04-11
+## [v2.0.0-rc.4] - 2024-05-11
 
 - Bufix: Only send channel.close once, and gracefully wait for closeok
 - Buffer publish frames and only send full publishes as RabbitMQ doesn't support channel.close in the middle of a publish frame sequence
 - Optimization: only flush socket buffer after a full publish sequence, not for each frame
 
-## [v2.0.0-rc.3] - 2024-04-09
+## [v2.0.0-rc.3] - 2024-05-09
 
 - Never reuse channels, even publish only channels are not safe if not all publish frames for a message was sent before the client disconnected
 - Don't log normal client disconnect errors
