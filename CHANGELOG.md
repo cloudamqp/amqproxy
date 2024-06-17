@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.0] - 2024-06-17
+
+- IPv6 addresses in brackets supported in upstream URL (eg. amqp://[::1])
+- Otherwise unchanged from v2.0.0-rc.8
+- Main difference against v1.x is that channels are pooled, multiple client channels are shared on a single upstream connection, dramatically decreasing the number of upstream connections needed
+
 ## [v2.0.0-rc.8] - 2024-04-12
 
 - Allow large client frame sizes, but split body frames to client if smaller than upstream frame size, to support large Header frames
