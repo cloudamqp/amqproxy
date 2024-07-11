@@ -12,4 +12,5 @@ RUN apk add --no-cache libssl3 pcre2 libevent libgcc \
 COPY --from=builder /tmp/bin/amqproxy /usr/bin/amqproxy
 USER 1000:1000
 EXPOSE 5673
+ENV GC_UNMAP_THRESHOLD=1
 ENTRYPOINT ["/usr/bin/amqproxy", "--listen=0.0.0.0"]

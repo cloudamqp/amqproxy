@@ -9,6 +9,7 @@ ExecStart=/usr/bin/amqproxy --config /etc/amqproxy.ini
 Restart=on-failure
 DynamicUser=yes
 LimitNOFILE=infinity
+Environment="GC_UNMAP_THRESHOLD=1"
 
 [Install]
 WantedBy=multi-user.target
