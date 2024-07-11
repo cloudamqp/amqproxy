@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.1] - 2024-07-11
+
+- Return unused memory faster to the OS using GC_UNMAP_THRESHOLD=1 in Dockerfile and systemd service file
+- Compile with Crystal 1.13.0, fixes a potential memory leak in Log
+
 ## [v2.0.0] - 2024-06-17
 
 - Main difference against v1.x is that channels are pooled, multiple client channels are shared on a single upstream connection, dramatically decreasing the number of upstream connections needed
