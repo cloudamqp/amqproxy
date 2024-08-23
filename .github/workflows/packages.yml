@@ -35,6 +35,7 @@ jobs:
     strategy:
       matrix:
         os:
+          - ubuntu-noble    # Ubuntu 24.04
           - ubuntu-jammy    # Ubuntu 22.04
           - ubuntu-focal    # Ubuntu 20.04
           - debian-bookworm # Debian 12
