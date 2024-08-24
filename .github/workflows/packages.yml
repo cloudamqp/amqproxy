@@ -17,7 +17,7 @@ jobs:
   tar:
     runs-on: ubuntu-latest
     container:
-      image: 84codes/crystal:latest-alpine
+      image: 84codes/crystal:1.13.2-alpine
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -58,7 +58,7 @@ jobs:
           file: deb.Dockerfile
           platforms: linux/amd64,linux/arm64
           build-args: |
-            image=84codes/crystal:latest-${{ matrix.os }}
+            image=84codes/crystal:1.13.2-${{ matrix.os }}
           outputs: builds
 
       - name: Upload GitHub artifact
