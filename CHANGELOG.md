@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Compile with Crystal 1.13.2, fixes a memory leak in Hash.
+
 ## [v2.0.1] - 2024-07-11
 
 - Return unused memory faster to the OS using GC_UNMAP_THRESHOLD=1 in Dockerfile and systemd service file

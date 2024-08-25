@@ -24,7 +24,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    container: 84codes/crystal:latest-ubuntu-22.04
+    container: 84codes/crystal:1.13.2-ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - run: shards install
@@ -33,7 +33,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    container: 84codes/crystal:latest-ubuntu-22.04
+    container: 84codes/crystal:1.13.2-ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - run: crystal tool format --check
