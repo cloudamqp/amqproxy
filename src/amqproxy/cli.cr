@@ -7,10 +7,12 @@ require "ini"
 require "log"
 
 class AMQProxy::CLI
+  Log = ::Log.for(self)
+
   @listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @http_port = ENV["HTTP_PORT"]? || 15673
-  @log_level : Log::Severity = Log::Severity::Info
+  @log_level : ::Log::Severity = ::Log::Severity::Info
   @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
   @term_timeout = -1
   @term_client_close_timeout = 0
@@ -23,7 +25,7 @@ class AMQProxy::CLI
         section.each do |key, value|
           case key
           when "upstream"                  then @upstream = value
-          when "log_level"                 then @log_level = Log::Severity.parse(value)
+          when "log_level"                 then @log_level = ::Log::Severity.parse(value)
           when "idle_connection_timeout"   then @idle_connection_timeout = value.to_i
           when "term_timeout"              then @term_timeout = value.to_i
           when "term_client_close_timeout" then @term_client_close_timeout = value.to_i
@@ -35,7 +37,7 @@ class AMQProxy::CLI
           case key
           when "port"            then @listen_port = value
           when "bind", "address" then @listen_address = value
-          when "log_level"       then @log_level = Log::Severity.parse(value)
+          when "log_level"       then @log_level = ::Log::Severity.parse(value)
           else                        raise "Unsupported config #{name}/#{key}"
           end
         end
@@ -63,7 +65,7 @@ class AMQProxy::CLI
       parser.on("--term-client-close-timeout=SECONDS", "At TERM the server SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
         @term_client_close_timeout = v.to_i
       end
-      parser.on("-d", "--debug", "Verbose logging") { @log_level = Log::Severity::Debug }
+      parser.on("-d", "--debug", "Verbose logging") { @log_level = ::Log::Severity::Debug }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
@@ -85,11 +87,11 @@ class AMQProxy::CLI
     tls = u.scheme == "amqps"
 
     log_backend = if ENV.has_key?("JOURNAL_STREAM")
-                    Log::IOBackend.new(formatter: JournalLogFormat, dispatcher: ::Log::DirectDispatcher)
+                    ::Log::IOBackend.new(formatter: Journal::LogFormat, dispatcher: ::Log::DirectDispatcher)
                   else
-                    Log::IOBackend.new(formatter: StdoutLogFormat, dispatcher: ::Log::DirectDispatcher)
+                    ::Log::IOBackend.new(formatter: Stdout::LogFormat, dispatcher: ::Log::DirectDispatcher)
                   end
-    Log.setup_from_env(default_level: @log_level, backend: log_backend)
+    ::Log.setup_from_env(default_level: @log_level, backend: log_backend)
 
     server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
 
@@ -155,7 +157,7 @@ class AMQProxy::CLI
     end
   end
 
-  struct JournalLogFormat < Log::StaticFormatter
+  struct Journal::LogFormat < ::Log::StaticFormatter
     def run
       source
       context(before: '[', after: ']')
@@ -165,7 +167,7 @@ class AMQProxy::CLI
     end
   end
 
-  struct StdoutLogFormat < Log::StaticFormatter
+  struct Stdout::LogFormat < ::Log::StaticFormatter
     def run
       timestamp
       severity
