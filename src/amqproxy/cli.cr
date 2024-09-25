@@ -89,30 +89,35 @@ class AMQProxy::CLI
     server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
 
     first_shutdown = true
-    shutdown = ->(_s : Signal) do
+    initiate_shutdown = ->(_s : Signal) do
       if first_shutdown
         first_shutdown = false
         server.stop_accepting_clients
-        server.disconnect_clients
-        if @term_timeout >= 0
-          spawn do
-            sleep @term_timeout
-            abort "Exiting with #{server.client_connections} client connections still open"
-          end
-        end
       else
         abort "Exiting with #{server.client_connections} client connections still open"
       end
     end
-    Signal::INT.trap &shutdown
-    Signal::TERM.trap &shutdown
+    Signal::INT.trap &initiate_shutdown
+    Signal::TERM.trap &initiate_shutdown
 
     HTTPServer.new(server, @listen_address, @http_port.to_i)
     server.listen(@listen_address, @listen_port.to_i)
 
+    shutdown server
+
     # wait until all client connections are closed
     until server.client_connections.zero?
       sleep 0.2
+    end
+  end
+
+  def shutdown(server)
+    server.disconnect_clients
+    if @term_timeout >= 0
+      spawn do
+        sleep @term_timeout
+        abort "Exiting with #{server.client_connections} client connections still open"
+      end
     end
   end
 
