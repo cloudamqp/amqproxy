@@ -59,10 +59,10 @@ class AMQProxy::CLI
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
       end
-      parser.on("--term-timeout=SECONDS", "At TERM the server SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
+      parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
         @term_timeout = v.to_i
       end
-      parser.on("--term-client-close-timeout=SECONDS", "At TERM the server SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
+      parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
         @term_client_close_timeout = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = ::Log::Severity::Debug }
