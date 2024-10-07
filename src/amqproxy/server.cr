@@ -65,8 +65,10 @@ module AMQProxy
         channel_pool = @channel_pools[c.credentials]
         c.read_loop(channel_pool)
       end
+    rescue ex : AMQProxy::Client::HealthCheck
+      Log.trace { "Client health check (#{remote_address})" }
     rescue ex # only raise from constructor, when negotating
-      Log.debug { "Client connection failure (#{remote_address}) #{ex.inspect}" }
+      Log.debug(exception: ex) { "Client connection failure (#{remote_address})" }
     ensure
       socket.close rescue nil
     end
