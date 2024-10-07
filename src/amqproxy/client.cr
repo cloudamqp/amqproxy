@@ -216,6 +216,15 @@ module AMQProxy
       proto = uninitialized UInt8[8]
       socket.read_fully(proto.to_slice)
 
+      # Custom protocol start for health check.
+      if proto == UInt8.static_array(65, 77, 81, 80, 9, 9, 9, 9)
+        # HEALTHOK
+        socket.write UInt8.static_array(72, 69, 65, 76, 84, 72, 79, 75).to_slice
+        socket.flush
+        socket.close
+        raise HealthCheck.new
+      end
+
       if proto != AMQ::Protocol::PROTOCOL_START_0_9_1 && proto != AMQ::Protocol::PROTOCOL_START_0_9
         socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
         socket.flush
@@ -260,6 +269,8 @@ module AMQProxy
       socket.flush
 
       {tune_ok, Credentials.new(user, password, vhost)}
+    rescue ex : AMQProxy::Client::HealthCheck
+      raise ex
     rescue ex
       raise NegotiationError.new "Client negotiation failed", ex
     end
@@ -287,5 +298,7 @@ module AMQProxy
     class WriteError < Error; end
 
     class NegotiationError < Error; end
+
+    class HealthCheck < Error; end
   end
 end
