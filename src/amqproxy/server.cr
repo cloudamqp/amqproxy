@@ -28,7 +28,10 @@ module AMQProxy
     end
 
     def listen(address, port)
-      @server = server = TCPServer.new(address, port)
+      listen(TCPServer.new(address, port))
+    end
+
+    def listen(@server : TCPServer)
       Log.info { "Proxy listening on #{server.local_address}" }
       while socket = server.accept?
         begin
