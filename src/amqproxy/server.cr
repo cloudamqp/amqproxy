@@ -66,7 +66,7 @@ module AMQProxy
         c.read_loop(channel_pool)
       end
     rescue ex # only raise from constructor, when negotating
-      Log.debug { "Client connection failure (#{remote_address}) #{ex.inspect}" }
+      Log.debug(exception: ex) { "Client connection failure (#{remote_address}) #{ex.inspect}" }
     ensure
       socket.close rescue nil
     end
