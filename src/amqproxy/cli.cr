@@ -1,5 +1,5 @@
-require "./amqproxy/version"
-require "./amqproxy/server"
+require "./version"
+require "./server"
 require "option_parser"
 require "uri"
 require "ini"
