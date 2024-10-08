@@ -134,5 +134,3 @@ class AMQProxy::CLI
     end
   end
 end
-
-AMQProxy::CLI.new.run

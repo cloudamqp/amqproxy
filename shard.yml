@@ -6,7 +6,7 @@ authors:
 
 targets:
   amqproxy:
-    main: src/amqproxy/cli.cr
+    main: src/amqproxy.cr
 
 dependencies:
   amq-protocol:
