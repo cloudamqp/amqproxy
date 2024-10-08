@@ -1,4 +1,4 @@
-require "./spec_helper"
+require "../spec_helper"
 
 describe AMQProxy::Server do
   it "dont reuse channels closed by upstream" do
