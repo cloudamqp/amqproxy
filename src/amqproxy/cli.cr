@@ -1,5 +1,6 @@
 require "./version"
 require "./server"
+require "./http_server"
 require "option_parser"
 require "uri"
 require "ini"
@@ -8,6 +9,7 @@ require "log"
 class AMQProxy::CLI
   @listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
   @listen_port = ENV["LISTEN_PORT"]? || 5673
+  @http_port = ENV["HTTP_PORT"]? || 15673
   @log_level : Log::Severity = Log::Severity::Info
   @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
   @term_timeout = -1
@@ -49,6 +51,7 @@ class AMQProxy::CLI
         @listen_address = v
       end
       parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| @listen_port = v.to_i }
+      parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| @http_port = v.to_i }
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
       end
@@ -104,6 +107,7 @@ class AMQProxy::CLI
     Signal::INT.trap &shutdown
     Signal::TERM.trap &shutdown
 
+    AMQProxy::HTTPServer.new(server, @listen_address, @http_port.to_i)
     server.listen(@listen_address, @listen_port.to_i)
 
     # wait until all client connections are closed
