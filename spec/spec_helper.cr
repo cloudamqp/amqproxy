@@ -27,3 +27,14 @@ def with_http_server(idle_connection_timeout = 5, &)
     end
   end
 end
+
+def verify_running_amqp!
+  TCPSocket.new("127.0.0.1", 5672, connect_timeout: 3.seconds).close
+rescue Socket::ConnectError
+  STDERR.puts "[ERROR] Specs require a running amqp server on 127.0.0.1:5672"
+  exit 1
+end
+
+Spec.before_suite do
+  verify_running_amqp!
+end
