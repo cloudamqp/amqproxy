@@ -1,8 +1,11 @@
+require "log"
 require "spec"
 require "uri"
 require "../src/amqproxy/server"
 require "../src/amqproxy/version"
 require "amqp-client"
+
+Log.setup_from_env(default_level: :error)
 
 MAYBE_SUDO = (ENV.has_key?("NO_SUDO") || `id -u` == "0\n") ? "" : "sudo "
 
