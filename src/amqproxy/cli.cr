@@ -48,8 +48,8 @@ class AMQProxy::CLI
     abort ex.message
   end
 
-  def run
-    p = OptionParser.parse do |parser|
+  def run(argv)
+    p = OptionParser.parse(argv) do |parser|
       parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
       parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
         @listen_address = v
@@ -72,7 +72,7 @@ class AMQProxy::CLI
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
-    @upstream ||= ARGV.shift?
+    @upstream ||= argv.shift?
     upstream_url = @upstream || abort p.to_s
 
     u = URI.parse upstream_url
