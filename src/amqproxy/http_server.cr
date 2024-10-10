@@ -28,7 +28,7 @@ module AMQProxy
         end
       end
       bind_tcp
-      spawn @http.listen, name: "HTTP_Server"
+      spawn @http.listen, name: "HTTP Server"
       Log.info { "HTTP server listening on #{@address}:#{@port}" }
     end
 
@@ -39,7 +39,6 @@ module AMQProxy
 
     def metrics(context)
       writer = PrometheusWriter.new(context.response, "amqproxy")
-
       writer.write({name:   "identity_info",
                     type:   "gauge",
                     value:  1,
@@ -50,11 +49,11 @@ module AMQProxy
                     }})
       writer.write({name:  "client_connections",
                     value: @amqproxy.client_connections,
-                    type:  "counter",
+                    type:  "gauge",
                     help:  "Number of client connections"})
       writer.write({name:  "upstream_connections",
                     value: @amqproxy.upstream_connections,
-                    type:  "counter",
+                    type:  "gauge",
                     help:  "Number of upstream connections"})
 
       context.response.status = ::HTTP::Status::OK
