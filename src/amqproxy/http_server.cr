@@ -1,9 +1,4 @@
-require "socket"
 require "log"
-require "amq-protocol"
-require "./channel_pool"
-require "./client"
-require "./upstream"
 require "./prometheus_writer"
 require "http/server"
 
