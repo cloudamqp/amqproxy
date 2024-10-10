@@ -53,5 +53,9 @@ module AMQProxy
 
       context.response.status = ::HTTP::Status::OK
     end
+
+    def close
+      @http.try &.close
+    end
   end
 end
