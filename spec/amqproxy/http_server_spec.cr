@@ -35,5 +35,3 @@ describe AMQProxy::HTTPServer do
     end
   end
 end
-
-
