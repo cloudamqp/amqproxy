@@ -107,7 +107,7 @@ class AMQProxy::CLI
     Signal::INT.trap &shutdown
     Signal::TERM.trap &shutdown
 
-    AMQProxy::HTTPServer.new(server, @listen_address, @http_port.to_i)
+    HTTPServer.new(server, @listen_address, @http_port.to_i)
     server.listen(@listen_address, @listen_port.to_i)
 
     # wait until all client connections are closed
