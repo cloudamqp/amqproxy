@@ -9,6 +9,6 @@ FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem
 COPY --from=builder /tmp/bin/amqproxy /
 USER 1000:1000
-EXPOSE 5673
+EXPOSE 5673 15673
 ENV GC_UNMAP_THRESHOLD=1
 ENTRYPOINT ["/amqproxy", "--listen=0.0.0.0"]
