@@ -260,8 +260,6 @@ module AMQProxy
       socket.flush
 
       {tune_ok, Credentials.new(user, password, vhost)}
-    rescue ex
-      raise NegotiationError.new "Client negotiation failed", ex
     end
 
     ServerProperties = AMQ::Protocol::Table.new({
@@ -285,7 +283,5 @@ module AMQProxy
     class ReadError < Error; end
 
     class WriteError < Error; end
-
-    class NegotiationError < Error; end
   end
 end
