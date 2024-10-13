@@ -68,8 +68,10 @@ module AMQProxy
         channel_pool = @channel_pools[c.credentials]
         c.read_loop(channel_pool)
       end
+    rescue IO::EOFError
+      # Client closed connection before/while negotiating
     rescue ex # only raise from constructor, when negotating
-      Log.debug(exception: ex) { "Client connection failure (#{remote_address}) #{ex.inspect}" }
+      Log.debug(exception: ex) { "Client negotiation failure (#{remote_address}) #{ex.inspect}" }
     ensure
       socket.close rescue nil
     end
