@@ -7,7 +7,7 @@ services:
     build: ../../
     expose:
       - "5673"
-    entrypoint: ["/amqproxy", "--debug", "--listen=0.0.0.0", "amqp://toxiproxy:7777"]
+    command: ["--debug", "amqp://toxiproxy:7777"]
     depends_on:
       toxiproxy:
         condition: service_started
