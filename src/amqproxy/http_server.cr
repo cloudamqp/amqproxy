@@ -15,7 +15,6 @@ module AMQProxy
         when "/metrics"
           metrics(context)
         when "/healthz"
-          context.response.status = ::HTTP::Status::OK
           context.response.content_type = "text/plain"
           context.response.print "OK"
         else
