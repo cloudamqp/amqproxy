@@ -12,6 +12,10 @@ In our benchmarks publishing one message per connection to a server (using TLS) 
 
 As of version 2.0.0 connections to the server can be shared by multiple client connections. When a client opens a channel it will get a channel on a shared upstream connection, the proxy will remap the channel numbers between the two. Many client connections can therefor share a single upstream connection. The benefit is that way fewer connections are needed to the upstream server. For instance, establihsing 10.000 connections after a server reboot might normally take several minutes, but with this proxy it can happen in seconds.
 
+A health check for amqproxy is available over http on http://listen_address:http_port/healthz and will return 200 when amqproxy is healthy.
+
+Some metrics are available over http on http://listen_address:http_port/metrics
+
 ## Installation
 
 ### Debian/Ubuntu
