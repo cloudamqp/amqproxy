@@ -20,10 +20,10 @@ end
 def with_http_server(idle_connection_timeout = 5, &)
   with_server do |server, amqp_url|
     http_server = AMQProxy::HTTPServer.new(server, "127.0.0.1", 15673)
-    yield http_server, server, amqp_url
-  ensure
-    if h = http_server
-      h.close
+    begin
+      yield http_server, server, amqp_url
+    ensure
+      http_server.close
     end
   end
 end
