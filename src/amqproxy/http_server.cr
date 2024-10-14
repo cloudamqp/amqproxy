@@ -18,7 +18,7 @@ module AMQProxy
           context.response.content_type = "text/plain"
           context.response.print "OK"
         else
-          context.response.status = ::HTTP::Status::NOT_FOUND
+          context.response.respond_with_status(::HTTP::Status::NOT_FOUND)
         end
       end
       bind_tcp
