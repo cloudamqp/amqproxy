@@ -46,7 +46,7 @@ def verify_running_amqp!
   port = 5671 if tls && UPSTREAM_URL.port.nil?
   TCPSocket.new(host, port, connect_timeout: 3.seconds).close
 rescue Socket::ConnectError
-  STDERR.puts "[ERROR] Specs require a running amqp server on #{host}:#{port}"
+  STDERR.puts "[ERROR] Specs require a running rabbitmq server on #{host}:#{port}"
   exit 1
 end
 
