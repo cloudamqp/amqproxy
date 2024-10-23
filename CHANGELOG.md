@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Added config option term_client_close_timeout and cli option --term-client-close-timeout to set how long to wait for clients to close their connections before sending Close when amqproxy receives a TERM signal.
+
 ## [v2.0.2] - 2024-08-25
 
 - Compile with Crystal 1.13.2, fixes a memory leak in Hash.

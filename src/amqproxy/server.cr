@@ -1,6 +1,7 @@
 require "socket"
 require "log"
 require "amq-protocol"
+require "uri"
 require "./channel_pool"
 require "./client"
 require "./upstream"
@@ -10,6 +11,15 @@ module AMQProxy
     Log = ::Log.for(self)
     @clients_lock = Mutex.new
     @clients = Array(Client).new
+
+    def self.new(url : URI)
+      tls = url.scheme == "amqps"
+      host = url.host || "127.0.0.1"
+      port = url.port || 5762
+      port = 5671 if tls && url.port.nil?
+      idle_connection_timeout = url.query_params.fetch("idle_connection_timeout", 5).to_i
+      new(host, port, tls, idle_connection_timeout)
+    end
 
     def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5)
       tls_ctx = OpenSSL::SSL::Context::Client.new if upstream_tls
