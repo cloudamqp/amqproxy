@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.3] - 2024-10-23
+
 - Added config option term_client_close_timeout and cli option --term-client-close-timeout to set how long to wait for clients to close their connections before sending Close when amqproxy receives a TERM signal.
+- Added a HTTP health check on http://listen_address:http_port/healthz
+- Added metrics on http://listen_address:http_port/metrics
+- Don't log when a client just opens and closes a TCP connection
+- Compile static binary
+
 
 ## [v2.0.2] - 2024-08-25
 
