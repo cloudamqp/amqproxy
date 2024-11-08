@@ -21,8 +21,12 @@ module AMQProxy
       new(host, port, tls, idle_connection_timeout)
     end
 
-    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5)
-      tls_ctx = OpenSSL::SSL::Context::Client.new if upstream_tls
+    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5, ssl_verify_mode = OpenSSL::SSL::VerifyMode::PEER)
+      tls_ctx = if upstream_tls
+        context = OpenSSL::SSL::Context::Client.new
+        context.verify_mode = ssl_verify_mode
+        context
+      end
       @channel_pools = Hash(Credentials, ChannelPool).new do |hash, credentials|
         hash[credentials] = ChannelPool.new(upstream_host, upstream_port, tls_ctx, credentials, idle_connection_timeout)
       end

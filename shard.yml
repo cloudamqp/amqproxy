@@ -1,5 +1,5 @@
 name: amqproxy
-version: 2.0.3
+version: 2.0.3-oleks
 
 authors:
   - CloudAMQP <contact@cloudamqp.com>

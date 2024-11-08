@@ -14,6 +14,7 @@ class AMQProxy::CLI
   @http_port = ENV["HTTP_PORT"]? || 15673
   @log_level : ::Log::Severity = ::Log::Severity::Info
   @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
+  @ssl_verify_mode = ENV["SSL_VERIFY_MODE"]? || OpenSSL::SSL::VerifyMode::PEER.to_s
   @term_timeout = -1
   @term_client_close_timeout = 0
   @upstream = ENV["AMQP_URL"]?
@@ -30,6 +31,7 @@ class AMQProxy::CLI
           when "idle_connection_timeout"   then @idle_connection_timeout = value.to_i
           when "term_timeout"              then @term_timeout = value.to_i
           when "term_client_close_timeout" then @term_client_close_timeout = value.to_i
+          when "ssl_verify_mode"           then @ssl_verify_mode = value
           else                                  raise "Unsupported config #{name}/#{key}"
           end
         end
@@ -61,6 +63,9 @@ class AMQProxy::CLI
       parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| @http_port = v.to_i }
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
+      end
+      parser.on("-s SSL_VERIFY_MODE", "--ssl-verify-mode=VALUE", "SSL Verification Mode (default PEER). See OpenSSL::SSL::VerifyMode.") do |v|
+        @ssl_verify_mode = v
       end
       parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
         @term_timeout = v.to_i
@@ -99,7 +104,8 @@ class AMQProxy::CLI
     Signal::INT.trap &->self.initiate_shutdown(Signal)
     Signal::TERM.trap &->self.initiate_shutdown(Signal)
 
-    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
+    ssl_verify_mode = OpenSSL::SSL::VerifyMode.parse?(@ssl_verify_mode) || abort("Invalid SSL verify mode #{@ssl_verify_mode}")
+    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout, ssl_verify_mode)
 
     HTTPServer.new(server, @listen_address, @http_port.to_i)
     server.listen(@listen_address, @listen_port.to_i)
