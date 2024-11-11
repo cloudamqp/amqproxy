@@ -232,7 +232,7 @@ module AMQProxy
     end
 
     ClientProperties = AMQ::Protocol::Table.new({
-      connection_name: "AMQProxy #{VERSION}",
+      connection_name: System.hostname,
       product:         "AMQProxy",
       version:         VERSION,
       capabilities:    {
