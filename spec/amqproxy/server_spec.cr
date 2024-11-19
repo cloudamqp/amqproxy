@@ -242,4 +242,21 @@ describe AMQProxy::Server do
       end
     end
   end
+
+  it "should treat all frames as heartbeats" do
+    with_server do |server, proxy_url|
+      Fiber.yield
+      AMQP::Client.start("#{proxy_url}?heartbeat=1") do |conn|
+        client = server.@clients.first?.should_not be_nil
+        last_heartbeat = client.@last_heartbeat
+        conn.channel
+        Fiber.yield
+        client.@last_heartbeat.should be > last_heartbeat
+        last_heartbeat = client.@last_heartbeat
+        conn.write AMQ::Protocol::Frame::Heartbeat.new
+        Fiber.yield
+        client.@last_heartbeat.should be > last_heartbeat
+      end
+    end
+  end
 end
