@@ -60,9 +60,10 @@ module AMQProxy
       i = 0u64
       socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
       loop do
-        case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
-        when AMQ::Protocol::Frame::Heartbeat
-          @last_heartbeat = Time.monotonic
+        frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+        @last_heartbeat = Time.monotonic
+        case frame
+        when AMQ::Protocol::Frame::Heartbeat # noop
         when AMQ::Protocol::Frame::Connection::CloseOk then return
         when AMQ::Protocol::Frame::Connection::Close
           close_all_upstream_channels(frame.reply_code, frame.reply_text)
