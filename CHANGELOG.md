@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.0.4] - 2024-11-25
+
 - Bugfix: Treat all frames as heartbeats
 
 ## [v2.0.3] - 2024-10-23
