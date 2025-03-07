@@ -9,7 +9,6 @@ module AMQProxy
     Log = ::Log.for(self)
     @socket : IO
     @channels = Hash(UInt16, DownstreamChannel).new
-    @channels_lock = Mutex.new
     @channel_max : UInt16
     @lock = Mutex.new
     @remote_address : String
@@ -45,10 +44,10 @@ module AMQProxy
     end
 
     private def create_upstream_channel(downstream_channel : DownstreamChannel)
-      @channels_lock.synchronize do
+      with_channels do |channels|
         1_u16.upto(@channel_max) do |i|
-          unless @channels.has_key?(i)
-            @channels[i] = downstream_channel
+          unless channels.has_key?(i)
+            channels[i] = downstream_channel
             return UpstreamChannel.new(self, i)
           end
         end
@@ -56,12 +55,16 @@ module AMQProxy
       end
     end
 
+    private def with_channels(&)
+      yield @channels
+    end
+
     def close_channel(id, code, reason)
       send AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
     end
 
     def channels
-      @channels.size
+      with_channels &.size
     end
 
     # Frames from upstream (to client)
@@ -86,15 +89,15 @@ module AMQProxy
         when AMQ::Protocol::Frame::Channel::OpenOk # assume it always succeeds
         when AMQ::Protocol::Frame::Channel::Close
           send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-          if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
+          if downstream_channel = with_channels &.delete(frame.channel)
             downstream_channel.write frame
           end
         when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
-          if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
+          if downstream_channel = with_channels &.delete(frame.channel)
             downstream_channel.write(frame)
           end
         else
-          if downstream_channel = @channels_lock.synchronize { @channels[frame.channel]? }
+          if downstream_channel = with_channels &.[frame.channel]?
             downstream_channel.write(frame)
           else
             Log.debug { "Frame for unmapped channel from upstream: #{frame}" }
@@ -114,21 +117,21 @@ module AMQProxy
     end
 
     private def close_all_client_channels(code = 500_u16, reason = "UPSTREAM_ERROR")
-      @channels_lock.synchronize do
-        return if @channels.empty?
-        Log.debug { "Upstream connection closed, closing #{@channels.size} client channels" }
-        @channels.each_value do |downstream_channel|
+      with_channels do |channels|
+        return if channels.empty?
+        Log.debug { "Upstream connection closed, closing #{channels.size} client channels" }
+        channels.each_value do |downstream_channel|
           downstream_channel.close(code, reason)
         end
-        @channels.clear
+        channels.clear
       end
     end
 
     private def send_to_all_clients(frame : AMQ::Protocol::Frame::Connection)
       Log.debug { "Sending broadcast frame to all client connections" }
       clients = Set(Client).new
-      @channels_lock.synchronize do
-        @channels.each_value do |downstream_channel|
+      with_channels do |channels|
+        channels.each_value do |downstream_channel|
           clients << downstream_channel.client
         end
       end
@@ -144,9 +147,7 @@ module AMQProxy
         raise "Connection frames should not be sent through here: #{frame}"
       when AMQ::Protocol::Frame::Channel::CloseOk
         # when upstream server requested a channel close and client confirmed
-        @channels_lock.synchronize do
-          @channels.delete(frame.channel)
-        end
+        with_channels &.delete(frame.channel)
       end
       send frame
     end

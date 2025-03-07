@@ -40,9 +40,13 @@ module AMQProxy
       end
     end
 
+    private def with_channel_map(&)
+      yield @channel_map
+    end
+
     private def finish_publish(channel)
       buffer = @publish_buffers[channel]
-      if upstream_channel = @channel_map[channel]
+      if upstream_channel = with_channel_map &.[channel]
         upstream_channel.write(buffer.publish)
         upstream_channel.write(buffer.header)
         buffer.bodies.each do |body|
@@ -61,6 +65,7 @@ module AMQProxy
       socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
       loop do
         frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+        Log.debug { "Received frame: #{frame}" }
         @last_heartbeat = Time.monotonic
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
@@ -70,13 +75,15 @@ module AMQProxy
           write AMQ::Protocol::Frame::Connection::CloseOk.new
           return
         when AMQ::Protocol::Frame::Channel::Open
-          raise "Channel already opened" if @channel_map.has_key? frame.channel
-          upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
-          @channel_map[frame.channel] = upstream_channel
+          with_channel_map do |channel_map|
+            raise "Channel already opened" if channel_map.has_key? frame.channel
+            upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
+            channel_map[frame.channel] = upstream_channel
+          end
           write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
         when AMQ::Protocol::Frame::Channel::CloseOk
           # Server closed channel, CloseOk reply to server is already sent
-          @channel_map.delete(frame.channel)
+          with_channel_map &.delete(frame.channel)
         when AMQ::Protocol::Frame::Basic::Publish
           @publish_buffers[frame.channel] = PublishBuffer.new(frame)
         when AMQ::Protocol::Frame::Header
@@ -92,7 +99,7 @@ module AMQProxy
         else
           src_channel = frame.channel
           begin
-            if upstream_channel = @channel_map[frame.channel]
+            if upstream_channel = with_channel_map &.[frame.channel]?
               upstream_channel.write(frame)
             else
               # Channel::Close is sent, waiting for CloseOk
@@ -121,7 +128,7 @@ module AMQProxy
         end
       end
     rescue ex : IO::Error
-      Log.debug { "Disconnected #{ex.inspect}" }
+      Log.debug(exception: ex) { "Disconnected #{ex.inspect}" }
     else
       Log.debug { "Disconnected" }
     ensure
@@ -132,6 +139,7 @@ module AMQProxy
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
       @lock.synchronize do
+        Log.debug { "Sending frame: #{frame}" }
         case frame
         when AMQ::Protocol::Frame::BytesBody
           # Upstream might send large frames, split them to support lower client frame_max
@@ -149,9 +157,9 @@ module AMQProxy
       end
       case frame
       when AMQ::Protocol::Frame::Channel::Close
-        @channel_map[frame.channel] = nil
+        with_channel_map &.[frame.channel] = nil
       when AMQ::Protocol::Frame::Channel::CloseOk
-        @channel_map.delete(frame.channel)
+        with_channel_map &.delete(frame.channel)
       when AMQ::Protocol::Frame::Connection::CloseOk
         @socket.close rescue nil
       end
@@ -174,13 +182,15 @@ module AMQProxy
     end
 
     private def close_all_upstream_channels(code = 500_u16, reason = "CLIENT_DISCONNECTED")
-      @channel_map.each_value do |upstream_channel|
-        upstream_channel.try &.close(code, reason)
-      rescue Upstream::WriteError
-        Log.debug { "Upstream write error while closing client's channels" }
-        next # Nothing to do
+      with_channel_map do |channel_map|
+        channel_map.each_value do |upstream_channel|
+          upstream_channel.try &.close(code, reason)
+        rescue Upstream::WriteError
+          Log.debug { "Upstream write error while closing client's channels" }
+          next # Nothing to do
+        end
+        channel_map.clear
       end
-      @channel_map.clear
     end
 
     private def expect_more_frames?(frame) : Bool
@@ -221,6 +231,7 @@ module AMQProxy
         socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
         socket.flush
         socket.close
+        Log.debug { "Invalid protocol start: #{proto}" }
         raise IO::EOFError.new("Invalid protocol start")
       end
 
