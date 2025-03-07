@@ -12,3 +12,7 @@ shards:
     git: https://github.com/cloudamqp/amqp-client.cr.git
     version: 1.2.5
 
+  execution_context:
+    git: https://github.com/ysbaddaden/execution_context.git
+    version: 0.1.0+git.commit.82cfdd61ae20147562cef695c0981bdde64a00e2
+

@@ -11,6 +11,9 @@ targets:
 dependencies:
   amq-protocol:
     github: cloudamqp/amq-protocol.cr
+  execution_context:
+    github: ysbaddaden/execution_context
+
 
 development_dependencies:
   amqp-client:
