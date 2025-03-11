@@ -5,6 +5,7 @@ require "option_parser"
 require "uri"
 require "ini"
 require "log"
+require "wait_group"
 
 class AMQProxy::CLI
   Log = ::Log.for(self)
@@ -105,8 +106,8 @@ class AMQProxy::CLI
     spawn(name: "HTTP Server") do
       http_server.listen
     end
-    server.listen(@listen_address, @listen_port.to_i)
 
+    server.listen(@listen_address, @listen_port.to_i)
     shutdown
 
     # wait until all client connections are closed

@@ -131,7 +131,7 @@ module AMQProxy
         end
       end
     rescue ex : IO::Error
-      Log.debug { "Disconnected #{ex.inspect}" }
+      Log.debug(exception: ex) { "Disconnected #{ex.inspect}" }
     else
       Log.debug { "Disconnected" }
     ensure
