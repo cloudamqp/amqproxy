@@ -101,7 +101,10 @@ class AMQProxy::CLI
 
     server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
 
-    HTTPServer.new(server, @listen_address, @http_port.to_i)
+    http_server = HTTPServer.new(server, @listen_address, @http_port.to_i)
+    spawn(name: "HTTP Server") do
+      http_server.listen
+    end
     server.listen(@listen_address, @listen_port.to_i)
 
     shutdown

@@ -22,13 +22,16 @@ module AMQProxy
         end
       end
       bind_tcp
-      spawn @http.listen, name: "HTTP Server"
       Log.info { "HTTP server listening on #{@address}:#{@port}" }
     end
 
     def bind_tcp
       addr = @http.bind_tcp @address, @port
       Log.info { "Bound to #{addr}" }
+    end
+
+    def listen
+      @http.listen
     end
 
     def metrics(context)
