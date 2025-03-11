@@ -118,11 +118,12 @@ class AMQProxy::CLI
 
   @first_shutdown = true
 
-  def initiate_shutdown(_s : Signal)
+  def initiate_shutdown(signal : Signal)
     unless server = @server
       exit 0
     end
     if @first_shutdown
+      Log.info { "Shutting down due to signal #{signal}" }
       @first_shutdown = false
       server.stop_accepting_clients
     else
