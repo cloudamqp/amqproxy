@@ -39,7 +39,7 @@ module AMQProxy
       upstream = Upstream.new(@host, @port, @tls_ctx, @credentials)
       Log.info { "Adding upstream connection" }
       @upstreams.unshift upstream
-      spawn do
+      spawn(name: "Upstream#read_loop") do
         begin
           upstream.read_loop
         ensure
