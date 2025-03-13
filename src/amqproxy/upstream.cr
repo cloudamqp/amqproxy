@@ -39,11 +39,16 @@ module AMQProxy
     end
 
     def open_channel_for(downstream_channel : DownstreamChannel) : UpstreamChannel
+      upstream_channel = create_upstream_channel(downstream_channel)
+      send AMQ::Protocol::Frame::Channel::Open.new(upstream_channel.channel)
+      upstream_channel
+    end
+
+    private def create_upstream_channel(downstream_channel : DownstreamChannel)
       @channels_lock.synchronize do
         1_u16.upto(@channel_max) do |i|
           unless @channels.has_key?(i)
             @channels[i] = downstream_channel
-            send AMQ::Protocol::Frame::Channel::Open.new(i)
             return UpstreamChannel.new(self, i)
           end
         end
