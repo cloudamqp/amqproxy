@@ -55,7 +55,7 @@ module AMQProxy
 
     # frames from enduser
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(remote_address: socket.remote_address.to_s)
+      Log.context.set(client: socket.remote_address.to_s)
       Log.debug { "Connected" }
       i = 0u64
       socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
