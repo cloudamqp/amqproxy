@@ -66,7 +66,7 @@ module AMQProxy
 
     # Frames from upstream (to client)
     def read_loop(socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(remote_address: @remote_address)
+      Log.context.set(upstream: @remote_address)
       i = 0u64
       loop do
         case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
