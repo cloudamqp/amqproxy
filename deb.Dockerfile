@@ -1,4 +1,4 @@
-ARG image=84codes/crystal:1.13.2-debian-11
+ARG image=84codes/crystal:1.15.1-debian-11
 FROM $image AS builder
 RUN apt-get update && \
     env DEBIAN_FRONTEND=noninteractive apt-get install -y dpkg help2man lintian

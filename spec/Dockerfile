@@ -1,4 +1,4 @@
-FROM 84codes/crystal:1.13.2-ubuntu-22.04
+FROM 84codes/crystal:1.15.1-ubuntu-22.04
 
 RUN apt-get update && apt-get install -y rabbitmq-server
 
