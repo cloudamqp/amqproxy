@@ -18,7 +18,7 @@ describe AMQProxy::Server do
           ch.basic_publish_confirm "foobar", "non-existing"
         end
       end
-      sleep 0.1
+      sleep 0.1.seconds
       server.upstream_connections.should eq 1
     end
   end
@@ -55,7 +55,7 @@ describe AMQProxy::Server do
           queue.publish_confirm(message_payload)
         end
       end
-      sleep 0.1
+      sleep 0.1.seconds
 
       AMQP::Client.start(proxy_url) do |conn|
         channel = conn.channel
@@ -66,7 +66,7 @@ describe AMQProxy::Server do
             num_received_messages += 1
           end
         end
-        sleep 0.1
+        sleep 0.1.seconds
       end
 
       num_received_messages.should eq num_messages_to_publish
@@ -84,7 +84,7 @@ describe AMQProxy::Server do
         server.client_connections.should eq 1
         server.upstream_connections.should eq 2
       end
-      sleep 0.1
+      sleep 0.1.seconds
       server.client_connections.should eq 0
       server.upstream_connections.should eq 2
     end
@@ -103,7 +103,7 @@ describe AMQProxy::Server do
         server.client_connections.should eq(1)
         server.upstream_connections.should eq(1)
       end
-      sleep 0.1
+      sleep 0.1.seconds
       server.client_connections.should eq(0)
       server.upstream_connections.should eq(1)
     end
@@ -116,7 +116,7 @@ describe AMQProxy::Server do
       AMQP::Client.start(proxy_url) do |conn|
         conn.channel
       end
-      sleep 2
+      sleep 2.seconds
       server.client_connections.should eq(0)
       server.upstream_connections.should eq(1)
     ensure
@@ -137,7 +137,7 @@ describe AMQProxy::Server do
           10.times do
             server.client_connections.should be >= 1
             server.upstream_connections.should be >= 1
-            sleep 1
+            sleep 1.seconds
           end
         end
         wait_for_channel.send(5) # send 5
@@ -149,7 +149,7 @@ describe AMQProxy::Server do
         AMQP::Client.start(proxy_url) do |conn|
           conn.channel
           wait_for_channel.send(2) # send 2
-          sleep 2
+          sleep 2.seconds
         end
         wait_for_channel.send(3) # send 3
       end
@@ -165,7 +165,7 @@ describe AMQProxy::Server do
           AMQP::Client.start(proxy_url) do |conn|
             conn.channel
             wait_for_channel.send(-1) # send 4 (this should not happen)
-            sleep 1
+            sleep 1.seconds
           end
         rescue ex
           # ex.message.should be "Error reading socket: Connection reset by peer"

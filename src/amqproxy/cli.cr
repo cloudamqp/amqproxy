@@ -9,6 +9,7 @@ require "log"
 class AMQProxy::CLI
   Log = ::Log.for(self)
 
+  @config : Config
   @listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
   @listen_port = ENV["LISTEN_PORT"]? || 5673
   @http_port = ENV["HTTP_PORT"]? || 15673
@@ -51,6 +52,8 @@ class AMQProxy::CLI
 
   def run(argv)
     raise "run cant be called multiple times" unless @server.nil?
+
+    @config = Config.new
 
     p = OptionParser.parse(argv) do |parser|
       parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
@@ -108,7 +111,7 @@ class AMQProxy::CLI
 
     # wait until all client connections are closed
     until server.client_connections.zero?
-      sleep 0.2
+      sleep 0.2.seconds
     end
     Log.info { "No clients left. Exiting." }
   end

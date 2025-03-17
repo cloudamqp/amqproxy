@@ -11,6 +11,9 @@ RUN shards install
 COPY src/ src/
 COPY spec/ spec/
 
+COPY spec/config.ini /tmp/config.ini
+COPY spec/config_empty.ini /tmp/config_empty.ini
+
 COPY spec/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
