@@ -42,9 +42,9 @@ module AMQProxy
     end
 
     private def with_channel_map(&)
-      @channel_map_lock.synchronize do
-        yield @channel_map
-      end
+      #      @channel_map_lock.synchronize do
+      yield @channel_map
+      #      end
     end
 
     private def finish_publish(channel)

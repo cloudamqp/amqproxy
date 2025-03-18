@@ -57,9 +57,9 @@ module AMQProxy
     end
 
     private def with_channels(&)
-      @channels_lock.synchronize do
-        yield @channels
-      end
+      # @channels_lock.synchronize do
+      yield @channels
+      # end
     end
 
     def close_channel(id, code, reason)

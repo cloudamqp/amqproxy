@@ -82,12 +82,12 @@ module AMQProxy
     end
 
     private def handle_connection(socket)
-      spawn(name: "Client #{socket.remote_address}") do
+      c = Client.new(socket)
+      channel_pool = with_channel_pools &.[c.credentials]
+      channel_pool.execution_context.spawn(name: "Client #{socket.remote_address}") do
         remote_address = socket.remote_address
-        c = Client.new(socket)
         Log.debug { "Client created for #{remote_address}" }
         active_client(c) do
-          channel_pool = with_channel_pools &.[c.credentials]
           c.read_loop(channel_pool)
         end
       rescue IO::EOFError
