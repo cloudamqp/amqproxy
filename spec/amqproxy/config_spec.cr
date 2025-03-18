@@ -42,11 +42,13 @@ describe AMQProxy::Config do
     ARGV.clear
 
     ENV["LISTEN_ADDRESS"] = "example_env.com"
-    ARGV.concat(["--listen=example_arg.com"])
+    ENV["LOG_LEVEL"] = "Error"
+    ARGV.concat(["--listen=example_arg.com", "--log-level=Warn"])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
     config.listen_address.should eq "example_arg.com"
+    config.log_level.should eq ::Log::Severity::Warn
 
     # Clean Up
     ENV.delete("LISTEN_ADDRESS")
@@ -64,6 +66,19 @@ describe AMQProxy::Config do
     
     config.listen_address.should eq "localhost"
     
+    # Restore ARGV
+    ARGV.clear
+    ARGV.concat(previous_argv)
+  end
+
+  it "reads without error when ini file is missing" do
+    previous_argv = ARGV.clone
+    ARGV.clear
+
+    config = AMQProxy::Config.load_with_cli(ARGV, "/tmp/non_existing_file.ini")
+
+    config.listen_address.should eq "localhost"
+
     # Restore ARGV
     ARGV.clear
     ARGV.concat(previous_argv)

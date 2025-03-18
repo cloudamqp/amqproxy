@@ -33,7 +33,9 @@ module AMQProxy
       @term_client_close_timeout = term_client_close_timeout
     end
   
-    def load_from_file(path) # ameba:disable Metrics/CyclomaticComplexity
+    protected def load_from_file(path) # ameba:disable Metrics/CyclomaticComplexity
+      return unless File.exists?(path)
+      
       INI.parse(File.read(path)).each do |name, section|
         case name
         when "main", ""
@@ -64,7 +66,7 @@ module AMQProxy
     end
   
     # Override config using environment variables
-    def load_with_env
+    protected def load_with_env
       @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
       @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
       @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
@@ -75,14 +77,15 @@ module AMQProxy
       @upstream = ENV["UPSTREAM"]? || @upstream
     end
 
-    def load_from_options(args)
+    # override config using command-line arguments
+    protected def load_from_options(args)
       p = OptionParser.parse(args) do |parser|
         parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
           @listen_address = v
         end
         parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| @listen_port = v.to_i }
         parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| @http_port = v.to_i }
-        parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
+        parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maximum time in seconds an unused pooled connection stays open (default 5s)") do |v|
           @idle_connection_timeout = v.to_i
         end
         parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
@@ -91,36 +94,24 @@ module AMQProxy
         parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
           @term_client_close_timeout = v.to_i
         end
+        parser.on("--log-level=LEVEL", "The log level (default: info)") { |v| @log_level = Log::Severity.parse(v) }
       end
     end
   
     # Override config using command-line arguments
     def self.load_with_cli(args, path = "config.ini") : Config
       config = new
-  
+
       # First, load config file
       config.load_from_file(path)
   
       # Then, load environment variables
       config.load_with_env
   
+      # Finally, load command-line arguments
       config.load_from_options(args)
 
       config
-    end
-  
-    # Print configuration for debugging
-    def to_s
-      <<-CONFIG
-      listen_address: #{@listen_address}
-      listen_port: #{@listen_port}
-      http_port: #{@http_port}
-      log_level: #{@log_level}
-      idle_connection_timeout: #{@idle_connection_timeout}
-      term_timeout: #{@term_timeout}
-      term_client_close_timeout: #{@term_client_close_timeout}
-      upstream: #{@upstream}
-      CONFIG
     end
   end
 end

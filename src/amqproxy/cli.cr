@@ -71,6 +71,7 @@ class AMQProxy::CLI
       parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
         @term_client_close_timeout = v.to_i
       end
+      parser.on("--log-level=LEVEL", "The log level (default: info)") { }
       parser.on("-d", "--debug", "Verbose logging") { @log_level = ::Log::Severity::Debug }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
