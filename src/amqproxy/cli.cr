@@ -9,14 +9,14 @@ require "log"
 class AMQProxy::CLI
   Log = ::Log.for(self)
 
-  @listen_address = ENV["LISTEN_ADDRESS"]? || "localhost"
-  @listen_port = ENV["LISTEN_PORT"]? || 5673
-  @http_port = ENV["HTTP_PORT"]? || 15673
+  @listen_address = "localhost"
+  @listen_port = 5673
+  @http_port = 15673
   @log_level : ::Log::Severity = ::Log::Severity::Info
-  @idle_connection_timeout : Int32 = ENV.fetch("IDLE_CONNECTION_TIMEOUT", "5").to_i
+  @idle_connection_timeout : Int32 = 5
   @term_timeout = -1
   @term_client_close_timeout = 0
-  @upstream = ENV["AMQP_URL"]?
+  @upstream = ""
   @server : AMQProxy::Server? = nil
 
   def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
@@ -36,7 +36,7 @@ class AMQProxy::CLI
       when "listen"
         section.each do |key, value|
           case key
-          when "port"            then @listen_port = value
+          when "port"            then @listen_port = value.to_i
           when "bind", "address" then @listen_address = value
           when "log_level"       then @log_level = ::Log::Severity.parse(value)
           else                        raise "Unsupported config #{name}/#{key}"
@@ -49,9 +49,29 @@ class AMQProxy::CLI
     abort ex.message
   end
 
+  def apply_env_variables
+    @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
+    @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
+    @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
+    @log_level = ::Log::Severity.parse(ENV["LOG_LEVEL"]) || @log_level
+    @idle_connection_timeout = ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i || @idle_connection_timeout
+    @term_timeout = ENV["TERM_TIMEOUT"]?.try &.to_i || @term_timeout
+    @term_client_close_timeout = ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i || @term_client_close_timeout
+    @upstream = ENV["AMQP_URL"]? || @upstream
+  end
+
   def run(argv)
     raise "run cant be called multiple times" unless @server.nil?
 
+    # Parse config file first
+    OptionParser.parse(argv) do |parser|
+      parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
+    end
+
+    # Apply environment variables
+    apply_env_variables
+
+    # Parse CLI arguments
     p = OptionParser.parse(argv) do |parser|
       parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
       parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
@@ -59,23 +79,22 @@ class AMQProxy::CLI
       end
       parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| @listen_port = v.to_i }
       parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| @http_port = v.to_i }
-      parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") do |v|
+      parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maximum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
       end
       parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
         @term_timeout = v.to_i
       end
-      parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
+      parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close before sending Close to clients (default: 0s)") do |v|
         @term_client_close_timeout = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = ::Log::Severity::Debug }
-      parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
-    @upstream ||= argv.shift?
+    @upstream ||= argv.shift? || ""
     upstream_url = @upstream || abort p.to_s
 
     u = URI.parse upstream_url
