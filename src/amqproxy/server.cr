@@ -82,9 +82,9 @@ module AMQProxy
     end
 
     private def handle_connection(socket)
-      c = Client.new(socket)
-      channel_pool = with_channel_pools &.[c.credentials]
-      channel_pool.execution_context.spawn(name: "Client #{socket.remote_address}") do
+      spawn(name: "Client #{socket.remote_address}") do
+        c = Client.new(socket)
+        channel_pool = with_channel_pools &.[c.credentials]
         remote_address = socket.remote_address
         Log.debug { "Client created for #{remote_address}" }
         active_client(c) do
