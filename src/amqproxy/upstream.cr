@@ -47,8 +47,8 @@ module AMQProxy
     private def create_upstream_channel(downstream_channel : DownstreamChannel)
       with_channels do |channels|
         1_u16.upto(@channel_max) do |i|
-          unless @channels.has_key?(i)
-            @channels[i] = downstream_channel
+          unless channels.has_key?(i)
+            channels[i] = downstream_channel
             return UpstreamChannel.new(self, i)
           end
         end
