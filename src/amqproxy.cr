@@ -9,4 +9,6 @@ require "./amqproxy/cli"
   {% end %}
 {% end %}
 
+puts "Built with #{Crystal::VERSION}"
+
 AMQProxy::CLI.new.run(ARGV)
