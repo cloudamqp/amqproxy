@@ -16,7 +16,7 @@ class AMQProxy::CLI
   @idle_connection_timeout : Int32 = 5
   @term_timeout = -1
   @term_client_close_timeout = 0
-  @upstream = ""
+  @upstream = nil
   @server : AMQProxy::Server? = nil
 
   def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
@@ -94,7 +94,7 @@ class AMQProxy::CLI
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
-    @upstream ||= argv.shift? || ""
+    @upstream ||= argv.shift?
     upstream_url = @upstream || abort p.to_s
 
     u = URI.parse upstream_url
