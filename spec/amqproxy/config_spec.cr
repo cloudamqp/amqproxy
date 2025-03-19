@@ -8,8 +8,8 @@ describe AMQProxy::Config do
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
-    config.listen_address.should eq "127.0.0.1"
-    config.listen_port.should eq 5673
+    config.listen_address.should eq "127.0.0.2"
+    config.listen_port.should eq 5678
 
     # Restore ARGV
     ARGV.clear
@@ -43,6 +43,7 @@ describe AMQProxy::Config do
 
     ENV["LISTEN_ADDRESS"] = "example_env.com"
     ENV["LOG_LEVEL"] = "Error"
+
     ARGV.concat(["--listen=example_arg.com", "--log-level=Warn"])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
@@ -52,6 +53,7 @@ describe AMQProxy::Config do
 
     # Clean Up
     ENV.delete("LISTEN_ADDRESS")
+    ENV.delete("LOG_LEVEL")
 
     # Restore ARGV
     ARGV.clear
