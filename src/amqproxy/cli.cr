@@ -16,7 +16,6 @@ class AMQProxy::CLI
   @idle_connection_timeout : Int32 = 5
   @term_timeout = -1
   @term_client_close_timeout = 0
-  @upstream = nil
   @server : AMQProxy::Server? = nil
 
   def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
@@ -53,7 +52,7 @@ class AMQProxy::CLI
     @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
     @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
     @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
-    @log_level = ::Log::Severity.parse(ENV["LOG_LEVEL"]) || @log_level
+    @log_level = ENV["LOG_LEVEL"]?.try { |level| ::Log::Severity.parse(level) } || @log_level
     @idle_connection_timeout = ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i || @idle_connection_timeout
     @term_timeout = ENV["TERM_TIMEOUT"]?.try &.to_i || @term_timeout
     @term_client_close_timeout = ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i || @term_client_close_timeout
