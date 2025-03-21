@@ -110,6 +110,37 @@ describe AMQProxy::Config do
     ARGV.concat(previous_argv)
   end
 
+  it "sets log level to debug when debug flag is present" do
+    previous_argv = ARGV.clone
+    ARGV.clear
+
+    ARGV.concat([
+      "--listen=example_arg.com",
+      "--port=5675",
+      "--http-port=15675",
+      "--log-level=Warn",
+      "--idle-connection-timeout=15",
+      "--term-timeout=16",
+      "--term-client-close-timeout=17",
+      "--debug",
+      "amqp://localhost:5679"])
+
+    config = AMQProxy::Config.load_with_cli(ARGV)
+
+    config.listen_address.should eq "example_arg.com"
+    config.log_level.should eq ::Log::Severity::Debug
+    config.listen_port.should eq 5675
+    config.http_port.should eq 15675
+    config.idle_connection_timeout.should eq 15
+    config.term_timeout.should eq 16
+    config.term_client_close_timeout.should eq 17
+    config.upstream.should eq "amqp://localhost:5679"
+  
+    # Restore ARGV
+    ARGV.clear
+    ARGV.concat(previous_argv)
+  end
+
   it "reads from empty config file returning default configuration" do
     previous_argv = ARGV.clone
     ARGV.clear

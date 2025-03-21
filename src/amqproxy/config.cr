@@ -44,7 +44,7 @@ module AMQProxy
       log_level                 : Log::Severity? = nil,
       idle_connection_timeout   : Int32?         = nil,
       term_timeout              : Int32?         = nil,
-      term_client_close_timeout : Int32?        = nil,
+      term_client_close_timeout : Int32?         = nil,
       upstream                  : String?        = nil
     )
       Config.new(
@@ -112,6 +112,9 @@ module AMQProxy
     protected def load_from_options(args)
       config = self
 
+      Log.info { "listen_address: #{config.listen_address}" }
+      is_debug : Bool = false
+
       p = OptionParser.parse(args) do |parser|
         parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
           config = config.with(listen_address: v)
@@ -128,7 +131,15 @@ module AMQProxy
           config = config.with(term_client_close_timeout: v.to_i)
         end
         parser.on("--log-level=LEVEL", "The log level (default: info)") { |v| config = config.with(log_level: Log::Severity.parse(v)) }
+        parser.on("-d", "--debug", "Verbose logging") { is_debug = true }
       end
+
+      # the debug flag overrules the log level
+      if (is_debug)
+        config = config.with(log_level: Log::Severity::Debug)
+      end
+
+      Log.info { "listen_address: #{config.listen_address}" }
 
       config
     end

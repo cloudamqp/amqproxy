@@ -10,16 +10,21 @@ require "log"
 class AMQProxy::CLI
   Log = ::Log.for(self)
 
-  @config : Config
+  @config : AMQProxy::Config? = nil
   @server : AMQProxy::Server? = nil
 
   def run(argv)
     raise "run cant be called multiple times" unless @server.nil?
 
-    file : String? = nil
+    Log.Debug { "Starting AMQProxy #{AMQProxy::VERSION} with options: #{ARGV.join(", ")}" }
 
-    # validate options and get config file when specified
-    p = OptionParser.parse(argv) do |parser|
+    ini_file : String? = nil
+
+    # Need to clone the args, because OptionParser will modify them
+    argv_validation = argv.clone
+
+    # validate options and get config ini file path when provided
+    p = OptionParser.parse(argv_validation) do |parser|
       parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
       parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") { }
       parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { }
@@ -29,15 +34,18 @@ class AMQProxy::CLI
       parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") { }
       parser.on("--log-level=LEVEL", "The log level (default: info)") { }
       parser.on("-d", "--debug", "Verbose logging") { }
-      parser.on("-c FILE", "--config=FILE", "Load config file") { |v| file = v }
+      parser.on("-c FILE", "--config=FILE", "Load config file") { |v| ini_file = v }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
-    @config = AMQProxy::Config.load_with_cli(argv, file)
+    # load cascading configuration: sequence defaults, file, env and cli
+    config = @config = AMQProxy::Config.load_with_cli(argv, ini_file)
 
-    u = URI.parse @config.upstream
+    upstream_url = config.upstream || abort p.to_s
+    u = URI.parse upstream_url
+
     abort "Invalid upstream URL" unless u.host
     default_port =
       case u.scheme
@@ -53,15 +61,15 @@ class AMQProxy::CLI
                   else
                     ::Log::IOBackend.new(formatter: Stdout::LogFormat, dispatcher: ::Log::DirectDispatcher)
                   end
-    ::Log.setup_from_env(default_level: @config.log_level, backend: log_backend)
+    ::Log.setup_from_env(default_level: config.log_level, backend: log_backend)
 
     Signal::INT.trap &->self.initiate_shutdown(Signal)
     Signal::TERM.trap &->self.initiate_shutdown(Signal)
 
-    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @config.idle_connection_timeout)
+    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, config.idle_connection_timeout)
 
-    HTTPServer.new(server, @config.listen_address, @config.http_port)
-    server.listen(config.listen_address, @config.listen_port)
+    HTTPServer.new(server, config.listen_address, config.http_port)
+    server.listen(config.listen_address, config.listen_port)
 
     shutdown
 
@@ -90,17 +98,20 @@ class AMQProxy::CLI
     unless server = @server
       raise "Can't call shutdown before run"
     end
+
+    config = @config.not_nil!
+
     if server.client_connections > 0
-      if @config.term_client_close_timeout > 0
-        wait_for_clients_to_close @config.term_client_close_timeout.seconds
+      if config.term_client_close_timeout > 0
+        wait_for_clients_to_close config.term_client_close_timeout.seconds
       end
       server.disconnect_clients
     end
 
     if server.client_connections > 0
-      if @config.term_timeout >= 0
+      if config.term_timeout >= 0
         spawn do
-          sleep @config.term_timeout
+          sleep config.term_timeout
           abort "Exiting with #{server.client_connections} client connections still open"
         end
       end
@@ -108,7 +119,7 @@ class AMQProxy::CLI
   end
 
   def wait_for_clients_to_close(close_timeout)
-    unless server = @server
+    unless server = @server 
       raise "Can't call shutdown before run"
     end
     Log.info { "Waiting for clients to close their connections." }
