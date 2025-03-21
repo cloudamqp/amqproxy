@@ -65,6 +65,7 @@ class AMQProxy::CLI
     # Parse config file first
     OptionParser.parse(argv) do |parser|
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
+      parser.invalid_option { } # Invalid arguments are handled by the next OptionParser
     end
 
     apply_env_variables
