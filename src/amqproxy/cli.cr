@@ -67,7 +67,6 @@ class AMQProxy::CLI
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| parse_config(v) }
     end
 
-    # Apply environment variables
     apply_env_variables
 
     # Parse CLI arguments
