@@ -134,8 +134,9 @@ module AMQProxy
         parser.on("-d", "--debug", "Verbose logging") { is_debug = true }
       end
 
-      # the debug flag overrules the log level
-      if (is_debug)
+      # the debug flag overrules the log level. Only set the level
+      # when it is not already set to debug or trace
+      if (is_debug && config.log_level > Log::Severity::Debug)
         config = config.with(log_level: Log::Severity::Debug)
       end
 

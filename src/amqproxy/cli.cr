@@ -16,8 +16,6 @@ class AMQProxy::CLI
   def run(argv)
     raise "run cant be called multiple times" unless @server.nil?
 
-    Log.Debug { "Starting AMQProxy #{AMQProxy::VERSION} with options: #{ARGV.join(", ")}" }
-
     ini_file : String? = nil
 
     # Need to clone the args, because OptionParser will modify them

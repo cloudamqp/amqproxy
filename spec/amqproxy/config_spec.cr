@@ -22,7 +22,27 @@ describe AMQProxy::Config do
     ARGV.concat(previous_argv)
   end
 
-  it "reads from environment variables and overwrites ini file values" do
+  it "reads from empty config file returning default configuration" do
+    previous_argv = ARGV.clone
+    ARGV.clear
+
+    config = AMQProxy::Config.load_with_cli(ARGV, "/tmp/config_empty.ini")
+    
+    config.listen_address.should eq "localhost"
+    config.listen_port.should eq 5673
+    config.http_port.should eq 15673
+    config.log_level.should eq ::Log::Severity::Info
+    config.idle_connection_timeout.should eq 5
+    config.term_timeout.should eq -1
+    config.term_client_close_timeout.should eq 0
+    config.upstream.should eq nil
+
+    # Restore ARGV
+    ARGV.clear
+    ARGV.concat(previous_argv)
+  end
+
+  it "reads from environment variables and overrules ini file values" do
     previous_argv = ARGV.clone
     ARGV.clear
 
@@ -141,45 +161,29 @@ describe AMQProxy::Config do
     ARGV.concat(previous_argv)
   end
 
-  it "reads from empty config file returning default configuration" do
+  it "keeps the log level to trace when debug flag is present" do
     previous_argv = ARGV.clone
     ARGV.clear
 
-    config = AMQProxy::Config.load_with_cli(ARGV, "/tmp/config_empty.ini")
-    
-    config.listen_address.should eq "localhost"
-    
-    # Restore ARGV
-    ARGV.clear
-    ARGV.concat(previous_argv)
-  end
-
-  it "reads init file without error" do
-    previous_argv = ARGV.clone
-    ARGV.clear
+    ARGV.concat([
+      "--log-level=Trace",
+      "--debug"])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
-    config.listen_address.should eq "127.0.0.2"
-    config.listen_port.should eq 5678
-    config.http_port.should eq 15678
-    config.log_level.should eq ::Log::Severity::Debug
-    config.idle_connection_timeout.should eq 55
-    config.term_timeout.should eq 56
-    config.term_client_close_timeout.should eq 57
-    config.upstream.should eq "amqp://localhost:5678"
-
+    config.log_level.should eq ::Log::Severity::Trace
+  
     # Restore ARGV
     ARGV.clear
     ARGV.concat(previous_argv)
   end
 
-  it "reads default ini file when null ini path is specified" do
+  it "reads default ini file when ini file path is null" do
     previous_argv = ARGV.clone
     ARGV.clear
 
-    initPath : String? = nil
-    config = AMQProxy::Config.load_with_cli(ARGV, initPath)
+    init_file_path : String? = nil
+    config = AMQProxy::Config.load_with_cli(ARGV, init_file_path)
 
     config.listen_address.should eq "127.0.0.2"
     config.listen_port.should eq 5678
