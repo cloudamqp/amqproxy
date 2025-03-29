@@ -126,7 +126,7 @@ class AMQProxy::CLI
   end
 
   def wait_for_clients_to_close(close_timeout)
-    unless server = @server 
+    unless server = @server
       raise "Can't call shutdown before run"
     end
     Log.info { "Waiting for clients to close their connections." }
