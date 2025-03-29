@@ -1,4 +1,5 @@
 require "./config"
+require "./options"
 require "./version"
 require "./server"
 require "./http_server"
@@ -16,30 +17,45 @@ class AMQProxy::CLI
   def run(argv)
     raise "run cant be called multiple times" unless @server.nil?
 
-    ini_file : String? = nil
-
     # Need to clone the args, because OptionParser will modify them
-    argv_validation = argv.clone
+    options = AMQProxy::Options.new
 
-    # validate options and get config ini file path when provided
-    p = OptionParser.parse(argv_validation) do |parser|
-      parser.banner = "Usage: amqproxy [options] [amqp upstream url]"
-      parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") { }
-      parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { }
-      parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { }
-      parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maxiumum time in seconds an unused pooled connection stays open (default 5s)") { }
-      parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") { }
-      parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") { }
-      parser.on("--log-level=LEVEL", "The log level (default: info)") { }
-      parser.on("-d", "--debug", "Verbose logging") { }
-      parser.on("-c FILE", "--config=FILE", "Load config file") { |v| ini_file = v }
+    p = OptionParser.parse(argv) do |parser|
+      parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
+        options = options.with(listen_address: v)
+      end
+      parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| options = options.with(listen_port: v.to_i) }
+      parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| options = options.with(http_port: v.to_i) }
+      parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maximum time in seconds an unused pooled connection stays open (default 5s)") do |v|
+        options = options.with(idle_connection_timeout: v.to_i)
+      end
+      parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
+        options = options.with(term_timeout: v.to_i)
+      end
+      parser.on("--term-client-close-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to send Close beforing sending Close to clients (default: 0s)") do |v|
+        options = options.with(term_client_close_timeout: v.to_i)
+      end
+      parser.on("--log-level=LEVEL", "The log level (default: info)") { |v| options = options.with(log_level: ::Log::Severity.parse(v)) }
+      parser.on("-d", "--debug", "Verbose logging") { options = options.with(is_debug: true) }
+      parser.on("-c FILE", "--config=FILE", "Load config file") { |v| options = options.with(ini_file: v) }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
     end
 
+    options = options.with(upstream: argv.shift?)
+
     # load cascading configuration: sequence defaults, file, env and cli
-    config = @config = AMQProxy::Config.load_with_cli(argv, ini_file)
+    config = @config = AMQProxy::Config.load_with_cli(options)
+
+    log_backend = if ENV.has_key?("JOURNAL_STREAM")
+      ::Log::IOBackend.new(formatter: Journal::LogFormat, dispatcher: ::Log::DirectDispatcher)
+    else
+      ::Log::IOBackend.new(formatter: Stdout::LogFormat, dispatcher: ::Log::DirectDispatcher)
+    end
+    ::Log.setup_from_env(default_level: config.log_level, backend: log_backend)
+
+    Log.debug { config.inspect }
 
     upstream_url = config.upstream || abort p.to_s
     u = URI.parse upstream_url
@@ -53,13 +69,6 @@ class AMQProxy::CLI
       end
     port = u.port || default_port
     tls = u.scheme == "amqps"
-
-    log_backend = if ENV.has_key?("JOURNAL_STREAM")
-                    ::Log::IOBackend.new(formatter: Journal::LogFormat, dispatcher: ::Log::DirectDispatcher)
-                  else
-                    ::Log::IOBackend.new(formatter: Stdout::LogFormat, dispatcher: ::Log::DirectDispatcher)
-                  end
-    ::Log.setup_from_env(default_level: config.log_level, backend: log_backend)
 
     Signal::INT.trap &->self.initiate_shutdown(Signal)
     Signal::TERM.trap &->self.initiate_shutdown(Signal)
