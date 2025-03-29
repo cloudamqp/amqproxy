@@ -34,6 +34,21 @@ describe AMQProxy::Config do
     config.upstream.should eq nil
   end
 
+  it "reads from environment variables and use AMPQ_URL over UPSTREAM variable" do
+    options = AMQProxy::Options.new
+
+    ENV["AMQP_URL"] = "amqp://localhost:5673"
+    ENV["UPSTREAM"] = "amqp://localhost:5674"
+    
+    config = AMQProxy::Config.load_with_cli(options)
+
+    config.upstream.should eq "amqp://localhost:5673"
+
+    # Clean up
+    ENV.delete("AMQP_URL")
+    ENV.delete("UPSTREAM")
+  end
+
   it "reads from environment variables and overrules ini file values" do
     options = AMQProxy::Options.new
 

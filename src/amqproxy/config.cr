@@ -69,7 +69,6 @@ module AMQProxy
         when "main", ""
           section.each do |key, value|
             case key
-            when "http_port"                 then config = config.with(http_port: value.to_i)
             when "upstream"                  then config = config.with(upstream: value)
             when "log_level"                 then config = config.with(log_level: ::Log::Severity.parse(value))
             when "idle_connection_timeout"   then config = config.with(idle_connection_timeout: value.to_i)
@@ -81,6 +80,7 @@ module AMQProxy
         when "listen"
           section.each do |key, value|
             case key
+            when "http_port"       then config = config.with(http_port: value.to_i)
             when "port"            then config = config.with(listen_port: value.to_i)
             when "bind", "address" then config = config.with(listen_address: value)
             when "log_level"       then config = config.with(log_level: ::Log::Severity.parse(value))
@@ -105,7 +105,7 @@ module AMQProxy
         idle_connection_timeout: ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i,
         term_timeout: ENV["TERM_TIMEOUT"]?.try &.to_i,
         term_client_close_timeout: ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i,
-        upstream: ENV["UPSTREAM"]?
+        upstream: ENV["AMQP_URL"]? || ENV["UPSTREAM"]?
       )
     end
 
