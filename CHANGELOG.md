@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.0.0] - 2025-04-03
+
+- Improved configuration handling: ENV varibales takes priority over config file variables. [#202](https://github.com/cloudamqp/amqproxy/pull/202)
+
+- ​Resolved a deadlock occurring when running lavinmqperf throughput against LavinMQ via AMQProxy, caused by fibers holding locks while attempting to write to blocked socket. [#200](https://github.com/cloudamqp/amqproxy/pull/200)
+
 ## [v2.0.4] - 2024-11-25
 
 - Bugfix: Treat all frames as heartbeats
