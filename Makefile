@@ -1,12 +1,13 @@
 SOURCES := $(shell find src/amqproxy -name '*.cr' 2> /dev/null)
-CRYSTAL_FLAGS := --release
-override CRYSTAL_FLAGS += --debug --error-on-warnings --link-flags=-pie
+LDFLAGS ?= -Wl,-O1 -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -pie
+CRYSTAL_FLAGS ?= --release
+override CRYSTAL_FLAGS += --error-on-warnings --link-flags="$(LDFLAGS)" --stats
 
 .PHONY: all
 all: bin/amqproxy
 
 bin/%: src/%.cr $(SOURCES) lib | bin
-	crystal build $< -o $(basename $@) $(CRYSTAL_FLAGS)
+	crystal build $< -o $@ $(CRYSTAL_FLAGS)
 
 lib: shard.yml shard.lock
 	shards install --production
@@ -55,7 +56,8 @@ uninstall:
 	$(RM) $(DESTDIR)$(MANDIR)/man1/amqproxy.1
 	$(RM) $(DESTDIR)$(SYSCONFDIR)/amqproxy/amqproxy.ini
 	$(RM) $(DESTDIR)$(UNITDIR)/amqproxy.service
-	$(RM) $(DESTDIR)$(DOCDIR)/{README.md,changelog}
+	$(RM) $(DESTDIR)$(DOCDIR)/amqproxy/{README.md,changelog}
+	$(RM) -r $(DESTDIR)$(DOCDIR)/amqproxy
 
 .PHONY: clean
 clean:
