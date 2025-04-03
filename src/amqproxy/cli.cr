@@ -126,7 +126,7 @@ class AMQProxy::CLI
 
     # wait until all client connections are closed
     until server.client_connections.zero?
-      sleep 0.2
+      sleep 200.milliseconds
     end
     Log.info { "No clients left. Exiting." }
   end
@@ -159,7 +159,7 @@ class AMQProxy::CLI
     if server.client_connections > 0
       if @term_timeout >= 0
         spawn do
-          sleep @term_timeout
+          sleep @term_timeout.seconds
           abort "Exiting with #{server.client_connections} client connections still open"
         end
       end
@@ -175,7 +175,7 @@ class AMQProxy::CLI
     spawn do
       loop do
         ch.send true if server.client_connections.zero?
-        sleep 0.1.seconds
+        sleep 100.milliseconds
       end
     rescue Channel::ClosedError
     end
