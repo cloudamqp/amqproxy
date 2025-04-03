@@ -3,9 +3,8 @@ Summary: Connection and channel pool for AMQP connections
 Version: 1.0.0
 Release: 1%{?dist}
 
-License: ASL 2.0
+License: Apache 2.0
 BuildRequires: systemd-rpm-macros crystal help2man
-Requires(pre): shadow-utils
 URL: https://github.com/cloudamqp/amqproxy
 Source: amqproxy.tar.gz
 
