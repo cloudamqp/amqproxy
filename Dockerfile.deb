@@ -1,0 +1,26 @@
+ARG build_image=84codes/crystal:latest-ubuntu-24.04
+
+FROM $build_image AS builder
+RUN apt-get update && apt-get install -y devscripts help2man lintian debhelper
+ARG version
+WORKDIR /usr/src/amqproxy_${version}
+COPY Makefile README.md LICENSE CHANGELOG.md shard.yml shard.lock ./
+COPY extras/amqproxy.service config/example.ini extras/
+COPY config/example.ini config/
+COPY src/ src/
+RUN sed -i -E "s/(VERSION =) .*/\1 \"$version\"/" src/amqproxy/version.cr
+RUN tar -czf ../amqproxy_${version}.orig.tar.gz -C /usr/src amqproxy_${version}
+COPY debian/ debian/
+RUN sed -i -E "s/^(amqproxy) \(.*\)/\1 \(${version}-1\)/" debian/changelog
+ARG DEB_BUILD_OPTIONS="parallel=2"
+RUN debuild -us -uc
+
+FROM ubuntu:24.04 AS test
+COPY --from=builder /usr/src/*deb .
+RUN apt-get update && apt-get install -y ./*.deb
+RUN amqproxy --version
+
+# Copy the deb package to a scratch image, that then can be exported
+FROM scratch
+ARG version
+COPY --from=builder /usr/src/*deb .

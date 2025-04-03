@@ -1,0 +1,14 @@
+Source: amqproxy
+Standards-Version: 4.6.0
+Homepage: https://github.com/cloudamqp/amqproxy
+Section: net
+Priority: optional
+Build-Depends: debhelper (>= 12), crystal (>= 1.15.0), help2man
+Maintainer: CloudAMQP <contact@cloudamqp.com>
+
+Package: amqproxy
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: connection pool for AMQP connections
+ Reuses connections and channels to an upstream
+ AMQP server.

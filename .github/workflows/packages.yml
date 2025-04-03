@@ -4,34 +4,44 @@ on:
     branches:
       - main
     tags:
-      - "v*"
-    paths:
-      - .github/workflows/packages.yml
-      - deb.Dockerfile
-      - build/deb
-      - shard.lock
-      - src/**
+      - v*
+  pull_request:
   workflow_dispatch:
 
 jobs:
   tar:
     runs-on: ubuntu-latest
-    container:
-      image: 84codes/crystal:1.15.1-alpine
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: shards install --production
-      - name: Build
-        run: build/tar 1
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Depot CLI
+        uses: depot/setup-action@v1
+
+      - name: Build tar package
+        uses: depot/build-push-action@v1
+        with:
+          project: nm81cffkc0
+          file: tar.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            image=84codes/crystal:1.15.1-${{ matrix.os }}
+          outputs: builds
+
       - name: Upload github artifact
         uses: actions/upload-artifact@v4
         with:
-          path: "*.tar.gz"
+          path: builds/**/*.tar.gz
           name: tar
 
   deb:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       matrix:
         os:
@@ -44,22 +54,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Generate version string
+        run: |
+          git_describe=$(git describe --tags)
+          echo "version=${git_describe:1}" >> $GITHUB_ENV
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install Depot CLI
+        uses: depot/setup-action@v1
 
       - name: Build deb package
-        uses: docker/build-push-action@v6
+        uses: depot/build-push-action@v1
         with:
-          cache-from: type=gha,scope=deb-${{ matrix.os }}
-          cache-to: type=gha,mode=max,scope=deb-${{ matrix.os }}
-          file: deb.Dockerfile
+          project: nm81cffkc0
+          file: Dockerfile.deb
           platforms: linux/amd64,linux/arm64
           build-args: |
             image=84codes/crystal:1.15.1-${{ matrix.os }}
+            version=${{ env.version }}
           outputs: builds
 
       - name: Upload GitHub artifact
@@ -83,3 +97,68 @@ jobs:
               -F "package[package_file]=@${PKG_FILE}" \
               https://packagecloud.io/api/v1/repos/${{ github.repository }}/packages.json
            done
+  rpm:
+    strategy:
+      matrix:
+        os: ['fedora-41']
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version string
+        run: |
+          last_tag=$(git describe --tags --abbrev=0)
+          version=$(cut -d- -f1 <<< ${last_tag:1})
+          pre_release=$(cut -d- -f2 <<< $last_tag)
+          if [ -n "$pre_release" ]
+          then version=$version~${pre_release//./}
+          fi
+          git_describe=$(git describe --tags)
+          post_release=${git_describe//$last_tag/}
+          post_release=${post_release:1}
+          post_release=${post_release//-/.}
+          if [ -n "$post_release" ]
+          then version=$version^${post_release}
+          fi
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: Install Depot CLI
+        uses: depot/setup-action@v1
+
+      - name: Build rpm package
+        uses: depot/build-push-action@v1
+        with:
+          project: nm81cffkc0
+          file: Dockerfile.rpm
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            build_image=84codes/crystal:1.15.1-${{ matrix.os }}
+            version=${{ env.version }}
+          outputs: RPMS
+
+      - uses: actions/upload-artifact@v4
+        name: Upload artifact
+        with:
+          name: rpm-packages-${{ matrix.os }}
+          path: RPMS
+
+      - name: Upload to Packagecloud
+        run: |
+          set -eux
+          curl -fsSO -u "${{ secrets.packagecloud_token }}:" https://packagecloud.io/api/v1/distributions.json
+          ID=$(echo "${{ matrix.os }}" | cut -d- -f1)
+          VERSION_ID=$(echo "${{ matrix.os }}" | cut -d- -f2)
+          DIST_ID=$(jq ".rpm[] | select(.index_name == \"${ID}\").versions[] | select(.index_name == \"${VERSION_ID}\").id" distributions.json)
+          for PKG_FILE in $(find RPMS -name "*.rpm" | sort -u -t/ -k3)
+          do curl -fsS -u "${{ secrets.packagecloud_token }}:" -XPOST \
+                  -F "package[distro_version_id]=${DIST_ID}" \
+                  -F "package[package_file]=@${PKG_FILE}" \
+                  https://packagecloud.io/api/v1/repos/${{ github.repository }}/packages.json
+          done
+        if: startsWith(github.ref, 'refs/tags/v')

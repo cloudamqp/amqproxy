@@ -1,12 +1,12 @@
 FROM 84codes/crystal:1.15.1-alpine AS builder
 WORKDIR /usr/src/amqproxy
-COPY shard.yml shard.lock ./
+COPY Makefile shard.yml shard.lock ./
 RUN shards install --production
 COPY src/ src/
-RUN shards build --production --release --static --debug
+ARG CRYSTAL_FLAGS="--static --release"
+RUN make bin/amqproxy && mkdir amqproxy && mv bin/amqproxy amqproxy/
 COPY README.md LICENSE extras/amqproxy.service amqproxy/
 COPY config/example.ini amqproxy/amqproxy.ini
-RUN mv bin/* amqproxy/
 ARG TARGETARCH
 RUN tar zcvf amqproxy-$(shards version)_static-$TARGETARCH.tar.gz amqproxy/
 
