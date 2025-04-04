@@ -5,7 +5,6 @@ require "option_parser"
 require "uri"
 require "ini"
 require "log"
-require "wait_group"
 
 class AMQProxy::CLI
   Log = ::Log.for(self)
