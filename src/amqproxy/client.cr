@@ -65,7 +65,7 @@ module AMQProxy
       socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
       loop do
         frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
-        Log.debug { "Received frame: #{frame}" }
+        Log.trace { "Received frame: #{frame}" }
         @last_heartbeat = Time.monotonic
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
@@ -139,7 +139,7 @@ module AMQProxy
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
       @lock.synchronize do
-        Log.debug { "Sending frame: #{frame}" }
+        Log.trace { "Sending frame: #{frame}" }
         case frame
         when AMQ::Protocol::Frame::BytesBody
           # Upstream might send large frames, split them to support lower client frame_max
