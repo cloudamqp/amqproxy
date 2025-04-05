@@ -1,10 +1,11 @@
 require "spec"
 require "../../src/amqproxy/config"
+require "../../src/amqproxy/options"
 
 describe AMQProxy::Config do
   it "loads defaults when no ini file, env vars or options are available" do
     options = AMQProxy::Options.new
-    options = options.with(ini_file: "/tmp/non_existing_file.ini")
+    options.ini_file = "/tmp/non_existing_file.ini"
 
     config = AMQProxy::Config.load_with_cli(options)
 
@@ -20,7 +21,7 @@ describe AMQProxy::Config do
 
   it "reads from empty config file returning default configuration" do
     options = AMQProxy::Options.new
-    options = options.with(ini_file: "/tmp/config_empty.ini")
+    options.ini_file = "/tmp/config_empty.ini"
 
     config = AMQProxy::Config.load_with_cli(options)
     
@@ -94,16 +95,14 @@ describe AMQProxy::Config do
     ENV["UPSTREAM"] = "amqp://localhost:5674"
 
     options = AMQProxy::Options.new
-    options = options.with(
-      listen_address: "example_arg.com",
-      listen_port: 5675,
-      http_port: 15675,
-      log_level: ::Log::Severity::Warn,
-      idle_connection_timeout: 15,
-      term_timeout: 16,
-      term_client_close_timeout: 17,
-      upstream: "amqp://localhost:5679"
-    )
+    options.listen_address = "example_arg.com"
+    options.listen_port = 5675
+    options.http_port = 15675
+    options.log_level = ::Log::Severity::Warn
+    options.idle_connection_timeout = 15
+    options.term_timeout = 16
+    options.term_client_close_timeout = 17
+    options.upstream = "amqp://localhost:5679"
 
     config = AMQProxy::Config.load_with_cli(options)
 
@@ -129,17 +128,15 @@ describe AMQProxy::Config do
 
   it "sets log level to debug when debug flag is present" do
     options = AMQProxy::Options.new
-    options = options.with(
-      listen_address: "example_arg.com",
-      listen_port: 5675,
-      http_port: 15675,
-      log_level: ::Log::Severity::Warn,
-      idle_connection_timeout: 15,
-      term_timeout: 16,
-      term_client_close_timeout: 17,
-      is_debug: true,
-      upstream: "amqp://localhost:5679"
-    )
+    options.listen_address = "example_arg.com"
+    options.listen_port = 5675
+    options.http_port = 15675
+    options.log_level = ::Log::Severity::Warn
+    options.idle_connection_timeout = 15
+    options.term_timeout = 16
+    options.term_client_close_timeout = 17
+    options.is_debug = true
+    options.upstream = "amqp://localhost:5679"
 
     config = AMQProxy::Config.load_with_cli(options)
 
@@ -155,17 +152,15 @@ describe AMQProxy::Config do
 
   it "keeps the log level to trace when debug flag is present" do
     options = AMQProxy::Options.new
-    options = options.with(
-      listen_address: "example_arg.com",
-      listen_port: 5675,
-      http_port: 15675,
-      log_level: ::Log::Severity::Trace,
-      idle_connection_timeout: 15,
-      term_timeout: 16,
-      term_client_close_timeout: 17,
-      is_debug: true,
-      upstream: "amqp://localhost:5679"
-    )
+    options.listen_address = "example_arg.com"
+    options.listen_port = 5675
+    options.http_port = 15675
+    options.log_level = ::Log::Severity::Trace
+    options.idle_connection_timeout = 15
+    options.term_timeout = 16
+    options.term_client_close_timeout = 17
+    options.is_debug = true
+    options.upstream = "amqp://localhost:5679"
 
     config = AMQProxy::Config.load_with_cli(options)
 
