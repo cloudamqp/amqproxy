@@ -3,87 +3,41 @@ require "log"
 require "option_parser"
 
 module AMQProxy
-  record Config,
-    listen_address : String,
-    listen_port : Int32,
-    http_port : Int32,
-    log_level : Log::Severity,
-    idle_connection_timeout : Int32,
-    term_timeout : Int32,
-    term_client_close_timeout : Int32,
-    upstream : String? do
+  struct Config
+    getter listen_address : String = "localhost"
+    getter listen_port : Int32 = 5673
+    getter http_port : Int32 = 15673
+    getter log_level : Log::Severity = Log::Severity::Info
+    getter idle_connection_timeout : Int32 = 5
+    getter term_timeout : Int32 = -1
+    getter term_client_close_timeout : Int32 = 0
+    getter upstream : String?
 
-    # Factory method to create a Config with nullable parameters
-    private def self.create(
-      listen_address : String? = nil, 
-      listen_port : Int32? = nil,
-      http_port : Int32? = nil,
-      log_level : Log::Severity? = nil,
-      idle_connection_timeout : Int32? = nil,
-      term_timeout : Int32? = nil,
-      term_client_close_timeout : Int32? = nil,
-      upstream : String? = nil
-    )
-      new(
-        listen_address || "localhost",
-        listen_port || 5673,
-        http_port || 15673,
-        log_level || Log::Severity::Info,
-        idle_connection_timeout || 5,
-        term_timeout || -1,
-        term_client_close_timeout || 0,
-        upstream || nil
-      )
-    end
-
-    # Method to return a new instance with modified fields (like C# `with`)
-    protected def with(
-      listen_address : String? = nil, 
-      listen_port : Int32? = nil,
-      http_port : Int32? = nil,
-      log_level : Log::Severity? = nil,
-      idle_connection_timeout : Int32? = nil,
-      term_timeout : Int32? = nil,
-      term_client_close_timeout : Int32? = nil,
-      upstream : String? = nil
-    )
-      Config.new(
-        listen_address || self.listen_address,
-        listen_port || self.listen_port,
-        http_port || self.http_port,
-        log_level || self.log_level,
-        idle_connection_timeout || self.idle_connection_timeout,
-        term_timeout || self.term_timeout,
-        term_client_close_timeout || self.term_client_close_timeout,
-        upstream || self.upstream
-      )
-    end
-
-    protected def load_from_file(path : String) # ameba:disable Metrics/CyclomaticComplexity
-      return self unless File.exists?(path)
-
-      config = self
+    protected def load_from_file(path : String?) # ameba:disable Metrics/CyclomaticComplexity
+      if (path.nil? || path.empty? || !File.exists?(path))
+        return self
+      end
 
       INI.parse(File.read(path)).each do |name, section|
         case name
         when "main", ""
           section.each do |key, value|
             case key
-            when "upstream"                  then config = config.with(upstream: value)
-            when "log_level"                 then config = config.with(log_level: ::Log::Severity.parse(value))
-            when "idle_connection_timeout"   then config = config.with(idle_connection_timeout: value.to_i)
-            when "term_timeout"              then config = config.with(term_timeout: value.to_i)
-            when "term_client_close_timeout" then config = config.with(term_client_close_timeout: value.to_i)
+            when "upstream"                  then @upstream = value
+            when "log_level"                 then @log_level = ::Log::Severity.parse(value)
+            when "idle_connection_timeout"   then @idle_connection_timeout = value.to_i
+            when "term_timeout"              then @term_timeout = value.to_i
+            when "term_client_close_timeout" then @term_client_close_timeout = value.to_i
             else                                  raise "Unsupported config #{name}/#{key}"
             end
           end
         when "listen"
           section.each do |key, value|
             case key
-            when "http_port"       then config = config.with(http_port: value.to_i)
-            when "port"            then config = config.with(listen_port: value.to_i)
-            when "bind", "address" then config = config.with(listen_address: value)
-            when "log_level"       then config = config.with(log_level: ::Log::Severity.parse(value))
+            when "http_port"       then @http_port = value.to_i
+            when "port"            then @listen_port = value.to_i
+            when "bind", "address" then @listen_address = value
+            when "log_level"       then @log_level = ::Log::Severity.parse(value)
             else                        raise "Unsupported config #{name}/#{key}"
             end
           end
@@ -91,47 +45,45 @@ module AMQProxy
         end
       end
 
-      config
+      self
     rescue ex
       abort ex.message
     end
 
     protected def load_from_env
-      self.with(
-        listen_address: ENV["LISTEN_ADDRESS"]?,
-        listen_port: ENV["LISTEN_PORT"]?.try &.to_i,
-        http_port: ENV["HTTP_PORT"]?.try &.to_i,
-        log_level: Log::Severity.parse(ENV["LOG_LEVEL"]? || self.log_level.to_s),
-        idle_connection_timeout: ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i,
-        term_timeout: ENV["TERM_TIMEOUT"]?.try &.to_i,
-        term_client_close_timeout: ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i,
-        upstream: ENV["AMQP_URL"]? || ENV["UPSTREAM"]?
-      )
+      @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
+      @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
+      @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
+      @log_level = Log::Severity.parse(ENV["LOG_LEVEL"]? || self.log_level.to_s) || @log_level
+      @idle_connection_timeout = ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i || @idle_connection_timeout
+      @term_timeout = ENV["TERM_TIMEOUT"]?.try &.to_i || @term_timeout
+      @term_client_close_timeout = ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i || @term_client_close_timeout
+      @upstream = ENV["AMQP_URL"]? || ENV["UPSTREAM"]? || @upstream
+
+      self
     end
 
     protected def load_from_options(options)
-      config = self
-
-      config = config.with(listen_address: options.listen_address,
-                           listen_port: options.listen_port,
-                           http_port: options.http_port,
-                           idle_connection_timeout: options.idle_connection_timeout,
-                           term_timeout: options.term_timeout,
-                           term_client_close_timeout: options.term_client_close_timeout,
-                           log_level: options.log_level,
-                           upstream: options.upstream)
+      @listen_address = options.listen_address || @listen_address
+      @listen_port = options.listen_port || @listen_port
+      @http_port = options.http_port || @http_port
+      @idle_connection_timeout = options.idle_connection_timeout || @idle_connection_timeout
+      @term_timeout = options.term_timeout || @term_timeout
+      @term_client_close_timeout = options.term_client_close_timeout || @term_client_close_timeout
+      @log_level = options.log_level || @log_level
+      @upstream = options.upstream || @upstream
 
       # the debug flag overrules the log level. Only set the level
       # when it is not already set to debug or trace
-      if (options.is_debug && config.log_level > Log::Severity::Debug)
-        config = config.with(log_level: Log::Severity::Debug)
+      if (options.is_debug && log_level > Log::Severity::Debug)
+        @log_level = Log::Severity::Debug
       end
 
-      config
+      self
     end
 
     def self.load_with_cli(options : Options)
-      self.create()
+      new()
         .load_from_file(options.ini_file || "config.ini")
         .load_from_env()
         .load_from_options(options)
