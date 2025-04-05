@@ -33,7 +33,7 @@ class AMQProxy::CLI
         options.term_client_close_timeout = v.to_i
       end
       parser.on("--log-level=LEVEL", "The log level (default: info)") { |v| options.log_level = ::Log::Severity.parse(v) }
-      parser.on("-d", "--debug", "Verbose logging") { options.is_debug = true }
+      parser.on("-d", "--debug", "Verbose logging") { options.debug = true }
       parser.on("-c FILE", "--config=FILE", "Load config file") { |v| options.ini_file = v }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }

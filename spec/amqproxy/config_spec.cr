@@ -135,7 +135,7 @@ describe AMQProxy::Config do
     options.idle_connection_timeout = 15
     options.term_timeout = 16
     options.term_client_close_timeout = 17
-    options.is_debug = true
+    options.debug = true
     options.upstream = "amqp://localhost:5679"
 
     config = AMQProxy::Config.load_with_cli(options)
@@ -159,7 +159,7 @@ describe AMQProxy::Config do
     options.idle_connection_timeout = 15
     options.term_timeout = 16
     options.term_client_close_timeout = 17
-    options.is_debug = true
+    options.debug = true
     options.upstream = "amqp://localhost:5679"
 
     config = AMQProxy::Config.load_with_cli(options)

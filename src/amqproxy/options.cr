@@ -7,7 +7,7 @@ module AMQProxy
     property term_timeout : Int32? = nil
     property term_client_close_timeout : Int32? = nil
     property log_level : Log::Severity? = nil
-    property is_debug : Bool = false
+    property? debug : Bool = false
     property ini_file : String? = nil
     property upstream : String? = nil
   end

@@ -75,7 +75,7 @@ module AMQProxy
 
       # the debug flag overrules the log level. Only set the level
       # when it is not already set to debug or trace
-      if options.is_debug && log_level > Log::Severity::Debug
+      if options.debug? && log_level > Log::Severity::Debug
         @log_level = Log::Severity::Debug
       end
 
