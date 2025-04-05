@@ -5,7 +5,6 @@
 /.vagrant/
 /.idea
 *.log
-*.deb
 *.tar.gz
 *.swp
 /builds/
