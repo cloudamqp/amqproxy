@@ -24,7 +24,7 @@ describe AMQProxy::Config do
     options.ini_file = "/tmp/config_empty.ini"
 
     config = AMQProxy::Config.load_with_cli(options)
-    
+
     config.listen_address.should eq "localhost"
     config.listen_port.should eq 5673
     config.http_port.should eq 15673
@@ -40,7 +40,7 @@ describe AMQProxy::Config do
 
     ENV["AMQP_URL"] = "amqp://localhost:5673"
     ENV["UPSTREAM"] = "amqp://localhost:5674"
-    
+
     config = AMQProxy::Config.load_with_cli(options)
 
     config.upstream.should eq "amqp://localhost:5673"
@@ -61,7 +61,7 @@ describe AMQProxy::Config do
     ENV["TERM_TIMEOUT"] = "13"
     ENV["TERM_CLIENT_CLOSE_TIMEOUT"] = "14"
     ENV["UPSTREAM"] = "amqp://localhost:5674"
-    
+
     config = AMQProxy::Config.load_with_cli(options)
 
     config.listen_address.should eq "example.com"
@@ -169,7 +169,7 @@ describe AMQProxy::Config do
 
   it "reads default ini file when ini file path is null" do
     options = AMQProxy::Options.new
-    
+
     config = AMQProxy::Config.load_with_cli(options)
 
     config.listen_address.should eq "127.0.0.2"

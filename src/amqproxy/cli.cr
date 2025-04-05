@@ -17,7 +17,7 @@ class AMQProxy::CLI
   def load_options(argv)
     options = AMQProxy::Options.new
 
-    p = OptionParser.parse(argv) do |parser|
+    OptionParser.parse(argv) do |parser|
       parser.on("-l ADDRESS", "--listen=ADDRESS", "Address to listen on (default is localhost)") do |v|
         options.listen_address = v
       end
@@ -44,7 +44,7 @@ class AMQProxy::CLI
 
     options
   end
-    
+
   def run(argv)
     raise "run cant be called multiple times" unless @server.nil?
 
@@ -63,7 +63,7 @@ class AMQProxy::CLI
 
     Log.debug { config.inspect }
 
-    upstream_url = config.upstream || abort p.to_s
+    upstream_url = config.upstream || abort "Upstream AMQP url is required. Add -h switch for help."
     u = URI.parse upstream_url
 
     abort "Invalid upstream URL" unless u.host
@@ -112,7 +112,9 @@ class AMQProxy::CLI
       raise "Can't call shutdown before run"
     end
 
-    config = @config.not_nil!
+    unless config = @config
+      raise "Configuration has not been loaded"
+    end
 
     if server.client_connections > 0
       if config.term_client_close_timeout > 0

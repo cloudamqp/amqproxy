@@ -14,7 +14,7 @@ module AMQProxy
     getter upstream : String?
 
     protected def load_from_file(path : String?) # ameba:disable Metrics/CyclomaticComplexity
-      if (path.nil? || path.empty? || !File.exists?(path))
+      if path.nil? || path.empty? || !File.exists?(path)
         return self
       end
 
@@ -50,7 +50,7 @@ module AMQProxy
       abort ex.message
     end
 
-    protected def load_from_env
+    protected def load_from_env # ameba:disable Metrics/CyclomaticComplexity
       @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
       @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
       @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
@@ -63,7 +63,7 @@ module AMQProxy
       self
     end
 
-    protected def load_from_options(options)
+    protected def load_from_options(options) # ameba:disable Metrics/CyclomaticComplexity
       @listen_address = options.listen_address || @listen_address
       @listen_port = options.listen_port || @listen_port
       @http_port = options.http_port || @http_port
@@ -75,7 +75,7 @@ module AMQProxy
 
       # the debug flag overrules the log level. Only set the level
       # when it is not already set to debug or trace
-      if (options.is_debug && log_level > Log::Severity::Debug)
+      if options.is_debug && log_level > Log::Severity::Debug
         @log_level = Log::Severity::Debug
       end
 
