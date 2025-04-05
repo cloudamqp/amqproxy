@@ -85,7 +85,7 @@ module AMQProxy
     def self.load_with_cli(options : Options)
       new()
         .load_from_file(options.ini_file || "config.ini")
-        .load_from_env()
+        .load_from_env
         .load_from_options(options)
     end
   end

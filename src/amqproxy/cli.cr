@@ -55,10 +55,10 @@ class AMQProxy::CLI
     config = @config = AMQProxy::Config.load_with_cli(options)
 
     log_backend = if ENV.has_key?("JOURNAL_STREAM")
-      ::Log::IOBackend.new(formatter: Journal::LogFormat, dispatcher: ::Log::DirectDispatcher)
-    else
-      ::Log::IOBackend.new(formatter: Stdout::LogFormat, dispatcher: ::Log::DirectDispatcher)
-    end
+                    ::Log::IOBackend.new(formatter: Journal::LogFormat, dispatcher: ::Log::DirectDispatcher)
+                  else
+                    ::Log::IOBackend.new(formatter: Stdout::LogFormat, dispatcher: ::Log::DirectDispatcher)
+                  end
     ::Log.setup_from_env(default_level: config.log_level, backend: log_backend)
 
     Log.debug { config.inspect }
