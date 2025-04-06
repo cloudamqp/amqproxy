@@ -12,6 +12,8 @@ module AMQProxy
     @clients_lock = Mutex.new
     @clients = Array(Client).new
 
+    @channel_pools_lock = Mutex.new
+
     def self.new(url : URI)
       tls = url.scheme == "amqps"
       host = url.host || "127.0.0.1"
@@ -29,12 +31,18 @@ module AMQProxy
       Log.info { "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}" }
     end
 
+    private def with_channel_pools(&)
+      @channel_pools_lock.synchronize do
+        yield @channel_pools
+      end
+    end
+
     def client_connections
       @clients.size
     end
 
     def upstream_connections
-      @channel_pools.each_value.sum &.connections
+      with_channel_pools &.each_value.sum(&.connections)
     end
 
     def listen(address, port)
@@ -43,10 +51,11 @@ module AMQProxy
 
     def listen(@server : TCPServer)
       Log.info { "Proxy listening on #{server.local_address}" }
+
       while socket = server.accept?
         begin
-          addr = socket.remote_address
-          spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
+          Log.debug { "Accepted new client from #{socket.remote_address} (#{socket.inspect})" }
+          handle_connection(socket)
         rescue IO::Error
           next
         end
@@ -72,18 +81,22 @@ module AMQProxy
       end
     end
 
-    private def handle_connection(socket, remote_address)
-      c = Client.new(socket)
-      active_client(c) do
-        channel_pool = @channel_pools[c.credentials]
-        c.read_loop(channel_pool)
+    private def handle_connection(socket)
+      spawn(name: "Client #{socket.remote_address}") do
+        c = Client.new(socket)
+        channel_pool = with_channel_pools &.[c.credentials]
+        remote_address = socket.remote_address
+        Log.debug { "Client created for #{remote_address}" }
+        active_client(c) do
+          c.read_loop(channel_pool)
+        end
+      rescue IO::EOFError
+        # Client closed connection before/while negotiating
+      rescue ex # only raise from constructor, when negotating
+        Log.debug(exception: ex) { "Client negotiation failure (#{remote_address}) #{ex.inspect}" }
+      ensure
+        socket.close rescue nil
       end
-    rescue IO::EOFError
-      # Client closed connection before/while negotiating
-    rescue ex # only raise from constructor, when negotating
-      Log.debug(exception: ex) { "Client negotiation failure (#{remote_address}) #{ex.inspect}" }
-    ensure
-      socket.close rescue nil
     end
 
     private def active_client(client, &)

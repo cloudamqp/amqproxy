@@ -119,9 +119,9 @@ class AMQProxy::CLI
 
     server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
 
-    HTTPServer.new(server, @listen_address, @http_port.to_i)
+    http_server = HTTPServer.new(server, @listen_address, @http_port.to_i)
+    spawn http_server.listen, name: "HTTP Server"
     server.listen(@listen_address, @listen_port.to_i)
-
     shutdown
 
     # wait until all client connections are closed
@@ -133,11 +133,12 @@ class AMQProxy::CLI
 
   @first_shutdown = true
 
-  def initiate_shutdown(_s : Signal)
+  def initiate_shutdown(signal : Signal)
     unless server = @server
       exit 0
     end
     if @first_shutdown
+      Log.info { "Shutting down due to signal #{signal}" }
       @first_shutdown = false
       server.stop_accepting_clients
     else

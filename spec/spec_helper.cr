@@ -31,6 +31,7 @@ end
 def with_http_server(idle_connection_timeout = 5, &)
   with_server do |server, amqp_url|
     http_server = AMQProxy::HTTPServer.new(server, "127.0.0.1", 15673)
+    spawn { http_server.listen }
     begin
       yield http_server, server, amqp_url
     ensure
@@ -45,6 +46,7 @@ def verify_running_amqp!
   port = UPSTREAM_URL.port || 5762
   port = 5671 if tls && UPSTREAM_URL.port.nil?
   TCPSocket.new(host, port, connect_timeout: 3.seconds).close
+  puts "AMQP running"
 rescue Socket::ConnectError
   STDERR.puts "[ERROR] Specs require a running rabbitmq server on #{host}:#{port}"
   exit 1
