@@ -34,9 +34,10 @@ jobs:
         with:
           images: cloudamqp/amqproxy
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}},value=latest
+            type=ref,event=branch
             type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Set up Depot CLI
         uses: depot/setup-action@v1
