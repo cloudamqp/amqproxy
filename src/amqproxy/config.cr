@@ -12,7 +12,7 @@ module AMQProxy
     getter term_timeout = -1
     getter term_client_close_timeout = 0
     getter upstream : String? = nil
-    getter debug = false
+    getter debug : Bool? = nil
     getter config_file = "config.ini"
 
     protected def load_from_file # ameba:disable Metrics/CyclomaticComplexity
