@@ -97,15 +97,15 @@ module AMQProxy
 
       self
     end
-  
+
     def self.load_with_cli(argv)
       new()
         .load_cli_options(argv.dup) # handle config file/help/version options
         .load_from_file
         .load_from_env
         .load_cli_options(argv)
-      rescue ex
-        abort ex.message
+    rescue ex
+      abort ex.message
     end
   end
 end

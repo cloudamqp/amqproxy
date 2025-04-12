@@ -7,7 +7,8 @@ describe AMQProxy::Config do
     ARGV.clear
 
     ARGV.concat([
-      "--config=/tmp/non_existing_file.ini"])
+      "--config=/tmp/non_existing_file.ini",
+    ])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
@@ -32,7 +33,7 @@ describe AMQProxy::Config do
     ARGV.concat(["--config=/tmp/config_empty.ini"])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
-    
+
     config.listen_address.should eq "localhost"
     config.listen_port.should eq 5673
     config.http_port.should eq 15673
@@ -59,7 +60,7 @@ describe AMQProxy::Config do
     ENV["TERM_TIMEOUT"] = "13"
     ENV["TERM_CLIENT_CLOSE_TIMEOUT"] = "14"
     ENV["UPSTREAM"] = "amqp://localhost:5674"
-    
+
     config = AMQProxy::Config.load_with_cli(ARGV)
 
     config.listen_address.should eq "example.com"
@@ -107,7 +108,8 @@ describe AMQProxy::Config do
       "--idle-connection-timeout=15",
       "--term-timeout=16",
       "--term-client-close-timeout=17",
-      "amqp://localhost:5679"])
+      "amqp://localhost:5679",
+    ])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
@@ -129,7 +131,7 @@ describe AMQProxy::Config do
     ENV.delete("TERM_TIMEOUT")
     ENV.delete("TERM_CLIENT_CLOSE_TIMEOUT")
     ENV.delete("UPSTREAM")
-    
+
     # Restore ARGV
     ARGV.clear
     ARGV.concat(previous_argv)
@@ -148,7 +150,8 @@ describe AMQProxy::Config do
       "--term-timeout=16",
       "--term-client-close-timeout=17",
       "--debug",
-      "amqp://localhost:5679"])
+      "amqp://localhost:5679",
+    ])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
@@ -160,7 +163,7 @@ describe AMQProxy::Config do
     config.term_timeout.should eq 16
     config.term_client_close_timeout.should eq 17
     config.upstream.should eq "amqp://localhost:5679"
-  
+
     # Restore ARGV
     ARGV.clear
     ARGV.concat(previous_argv)
@@ -172,12 +175,13 @@ describe AMQProxy::Config do
 
     ARGV.concat([
       "--log-level=Trace",
-      "--debug"])
+      "--debug",
+    ])
 
     config = AMQProxy::Config.load_with_cli(ARGV)
 
     config.log_level.should eq ::Log::Severity::Trace
-  
+
     # Restore ARGV
     ARGV.clear
     ARGV.concat(previous_argv)
