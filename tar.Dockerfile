@@ -1,4 +1,4 @@
-FROM 84codes/crystal:1.15.1-alpine AS builder
+FROM 84codes/crystal:1.16.3-alpine AS builder
 WORKDIR /usr/src/amqproxy
 COPY Makefile shard.yml shard.lock ./
 RUN shards install --production
