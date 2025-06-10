@@ -1,6 +1,9 @@
 require "./version"
 require "./server"
 require "./http_server"
+require "./tracer"
+require "./nil_tracer"
+require "./datadog_tracer"
 require "option_parser"
 require "uri"
 require "ini"
@@ -17,6 +20,11 @@ class AMQProxy::CLI
   @term_timeout = -1
   @term_client_close_timeout = 0
   @server : AMQProxy::Server? = nil
+  @datadog_enabled = false
+  @datadog_service_name = "amqproxy"
+  @datadog_env = "production"
+  @datadog_agent_host = "localhost"
+  @datadog_agent_port = 8126
 
   def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
     INI.parse(File.read(path)).each do |name, section|
@@ -30,6 +38,17 @@ class AMQProxy::CLI
           when "term_timeout"              then @term_timeout = value.to_i
           when "term_client_close_timeout" then @term_client_close_timeout = value.to_i
           else                                  raise "Unsupported config #{name}/#{key}"
+          end
+        end
+      when "datadog"
+        section.each do |key, value|
+          case key
+          when "enabled"      then @datadog_enabled = value.downcase == "true"
+          when "service_name" then @datadog_service_name = value
+          when "env"          then @datadog_env = value
+          when "agent_host"   then @datadog_agent_host = value
+          when "agent_port"   then @datadog_agent_port = value.to_i
+          else                     raise "Unsupported config #{name}/#{key}"
           end
         end
       when "listen"
@@ -48,7 +67,7 @@ class AMQProxy::CLI
     abort ex.message
   end
 
-  def apply_env_variables
+  def apply_env_variables # ameba:disable Metrics/CyclomaticComplexity
     @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
     @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
     @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
@@ -57,6 +76,11 @@ class AMQProxy::CLI
     @term_timeout = ENV["TERM_TIMEOUT"]?.try &.to_i || @term_timeout
     @term_client_close_timeout = ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i || @term_client_close_timeout
     @upstream = ENV["AMQP_URL"]? || @upstream
+    @datadog_enabled = ENV["DD_TRACE_ENABLED"]?.try { |v| v.downcase == "true" } || @datadog_enabled
+    @datadog_service_name = ENV["DD_SERVICE"]? || @datadog_service_name
+    @datadog_env = ENV["DD_ENV"]? || @datadog_env
+    @datadog_agent_host = ENV["DD_AGENT_HOST"]? || @datadog_agent_host
+    @datadog_agent_port = ENV["DD_TRACE_AGENT_PORT"]?.try &.to_i || @datadog_agent_port
   end
 
   def run(argv)
@@ -88,6 +112,11 @@ class AMQProxy::CLI
         @term_client_close_timeout = v.to_i
       end
       parser.on("-d", "--debug", "Verbose logging") { @log_level = ::Log::Severity::Debug }
+      parser.on("--datadog-enabled", "Enable Datadog APM tracing") { @datadog_enabled = true }
+      parser.on("--datadog-service=SERVICE", "Datadog service name (default: amqproxy)") { |v| @datadog_service_name = v }
+      parser.on("--datadog-env=ENV", "Datadog environment (default: production)") { |v| @datadog_env = v }
+      parser.on("--datadog-agent-host=HOST", "Datadog agent host (default: localhost)") { |v| @datadog_agent_host = v }
+      parser.on("--datadog-agent-port=PORT", "Datadog agent port (default: 8126)") { |v| @datadog_agent_port = v.to_i }
       parser.on("-h", "--help", "Show this help") { puts parser.to_s; exit 0 }
       parser.on("-v", "--version", "Display version") { puts AMQProxy::VERSION.to_s; exit 0 }
       parser.invalid_option { |arg| abort "Invalid argument: #{arg}" }
@@ -117,7 +146,12 @@ class AMQProxy::CLI
     Signal::INT.trap &->self.initiate_shutdown(Signal)
     Signal::TERM.trap &->self.initiate_shutdown(Signal)
 
-    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
+    tracer : Tracer = if @datadog_enabled
+      DatadogTracer.new(@datadog_service_name, @datadog_env, AMQProxy::VERSION, @datadog_agent_host, @datadog_agent_port)
+    else
+      NilTracer.new
+    end
+    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout, tracer)
 
     HTTPServer.new(server, @listen_address, @http_port.to_i)
     server.listen(@listen_address, @listen_port.to_i)
