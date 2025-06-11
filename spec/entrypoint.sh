@@ -1,8 +1,5 @@
 #!/bin/bash
-
-set -e
-set -u
-set -x
+set -eux
 
 export RABBITMQ_PID_FILE=/tmp/rabbitmq.pid
 
@@ -13,4 +10,4 @@ rabbitmq-server -detached
 rabbitmqctl wait $RABBITMQ_PID_FILE
 
 crystal --version
-crystal spec --order random
+crystal spec --order random --verbose
