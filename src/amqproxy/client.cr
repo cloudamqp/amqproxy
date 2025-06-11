@@ -128,14 +128,14 @@ module AMQProxy
           Log.warn { "No heartbeat response in #{time_since_last_heartbeat}s (max #{1 + @heartbeat}s), closing connection" }
           return
         end
-      rescue ex : IO::Error
-        Log.debug { "Disconnected #{ex.inspect}" }
-      else
-        Log.debug { "Disconnected" }
-      ensure
-        socket.close rescue nil
-        close_all_upstream_channels
       end
+    rescue ex : IO::Error
+      Log.debug { "Disconnected #{ex.inspect}" }
+    else
+      Log.debug { "Disconnected" }
+    ensure
+      socket.close rescue nil
+      close_all_upstream_channels
     end
 
     # Send frame to client, channel id should already be remapped by the caller
