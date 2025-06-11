@@ -43,7 +43,8 @@ module AMQProxy
 
     def listen(@server : TCPServer)
       Log.info { "Proxy listening on #{server.local_address}" }
-      while socket = server.accept?
+      loop do
+        socket = server.accept? || break
         begin
           addr = socket.remote_address
           spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
