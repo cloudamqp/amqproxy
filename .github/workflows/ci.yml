@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run tests
         run: ./run-specs-in-docker.sh
@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 10
     container: 84codes/crystal:latest-ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: shards install
       - run: bin/ameba
 
@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 10
     container: 84codes/crystal:latest-ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: crystal tool format --check
 
   integration:
@@ -43,6 +43,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: PHP client integration test using Docker Compose
         run: ./test/integration-php.sh
