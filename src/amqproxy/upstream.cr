@@ -117,19 +117,12 @@ module AMQProxy
       clients = Set(Client).new
       @channels_lock.synchronize do
         return if @channels.empty?
-<<<<<<< HEAD
-        Log.debug { "Upstream connection closed, closing #{@channels.size} client connections" }
-=======
->>>>>>> 0623630 (some reorganisation)
         @channels.each_value do |downstream_connection|
           clients << downstream_connection.client
         end
 
         clients.each do |client|
-<<<<<<< HEAD
-=======
-          Log.debug { "Closing client connection due to upstream failure. Client: #{client}" }
->>>>>>> 0623630 (some reorganisation)
+          Log.debug { "Closing client connection due to upstream failure." }
           client.close_connection(code, reason)
         end
         @channels.clear
