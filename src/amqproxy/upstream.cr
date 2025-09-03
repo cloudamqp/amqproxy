@@ -122,7 +122,7 @@ module AMQProxy
         end
 
         clients.each do |client|
-          Log.debug { "Closing client connection due to upstream failure. Client: #{client}" }
+          Log.debug { "Closing client connection due to upstream failure." }
           client.close_connection(code, reason)
         end
         @channels.clear
