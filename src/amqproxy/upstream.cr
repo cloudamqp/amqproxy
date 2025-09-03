@@ -127,6 +127,12 @@ module AMQProxy
         end
         @channels.clear
       end
+      
+      # Close all client connections that were using this upstream
+      clients.each do |client|
+        Log.debug { "Closing client connection due to upstream failure" }
+        client.close_connection(code, reason)
+      end
     end
 
     private def send_to_all_clients(frame : AMQ::Protocol::Frame::Connection)
