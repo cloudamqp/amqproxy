@@ -8,9 +8,9 @@ This proxy server, if run on the same machine as the client can save all that la
 
 Only "safe" channels are reused, that is channels where only Basic Publish or Basic Get (with no_ack) has occurred. Any channels who has subscribed to a queue will be closed when the client disconnects. However, the connection to the upstream AMQP server are always kept open and can be reused.
 
-In our benchmarks publishing one message per connection to a server (using TLS) with a round-trip latency of 50ms, takes on avarage 10ms using the proxy and 500ms without. You can read more about the proxy here [Maintaining long-lived connections with AMQProxy](https://www.cloudamqp.com/blog/2019-05-29-maintaining-long-lived-connections-with-AMQProxy.html)
+In our benchmarks publishing one message per connection to a server (using TLS) with a round-trip latency of 50ms, takes on average 10ms using the proxy and 500ms without. You can read more about the proxy here [Maintaining long-lived connections with AMQProxy](https://www.cloudamqp.com/blog/2019-05-29-maintaining-long-lived-connections-with-AMQProxy.html)
 
-As of version 2.0.0 connections to the server can be shared by multiple client connections. When a client opens a channel it will get a channel on a shared upstream connection, the proxy will remap the channel numbers between the two. Many client connections can therefor share a single upstream connection. The benefit is that way fewer connections are needed to the upstream server. For instance, establihsing 10.000 connections after a server reboot might normally take several minutes, but with this proxy it can happen in seconds.
+As of version 2.0.0 connections to the server can be shared by multiple client connections. When a client opens a channel it will get a channel on a shared upstream connection, the proxy will remap the channel numbers between the two. Many client connections can therefor share a single upstream connection. The benefit is that way fewer connections are needed to the upstream server. For instance, establishing 10.000 connections after a server reboot might normally take several minutes, but with this proxy it can happen in seconds.
 
 A health check for amqproxy is available over http on http://listen_address:http_port/healthz and will return 200 when amqproxy is healthy.
 
@@ -43,7 +43,7 @@ docker run --rm -it -p 5673:5673 cloudamqp/amqproxy amqp://SERVER:5672
 
 Note: If you are running the upstream server on localhost then you will have to add the `--network host` flag to the docker run command.
 
-Then from your AMQP client connect to localhost:5673, it will resuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
+Then from your AMQP client connect to localhost:5673, it will reuse connections made to the upstream. The AMQP_URL should only include protocol, hostname and port (only if non default, 5672 for AMQP and 5671 for AMQPS). Any username, password or vhost will be ignored, and it's up to the client to provide them.
 
 ## Installation (from source)
 
@@ -90,5 +90,5 @@ There are three ways to configure the AMQProxy.
 2. Command line options & argument
 3. Environment variables
 
-Settings that are avilable in the config file will override the corresponding command line options. A command line option will override the corresponding environment variable. And so on.
+Settings that are available in the config file will override the corresponding command line options. A command line option will override the corresponding environment variable. And so on.
 The different configuration approaches can also be mixed.
