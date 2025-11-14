@@ -1,5 +1,8 @@
 name: CI
 on:
+  pull_request:
+    branches:
+      - main
   push:
     paths:
       - 'run-specs-in-docker.sh'
