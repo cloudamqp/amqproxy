@@ -14,6 +14,7 @@ class AMQProxy::CLI
   @http_port = 15673
   @log_level : ::Log::Severity = ::Log::Severity::Info
   @idle_connection_timeout : Int32 = 5
+  @max_upstream_channels : UInt16 = UInt16::MAX
   @term_timeout = -1
   @term_client_close_timeout = 0
   @server : AMQProxy::Server? = nil
@@ -27,6 +28,7 @@ class AMQProxy::CLI
           when "upstream"                  then @upstream = value
           when "log_level"                 then @log_level = ::Log::Severity.parse(value)
           when "idle_connection_timeout"   then @idle_connection_timeout = value.to_i
+          when "max_upstream_channels"     then @max_upstream_channels = value.to_u16
           when "term_timeout"              then @term_timeout = value.to_i
           when "term_client_close_timeout" then @term_client_close_timeout = value.to_i
           else                                  raise "Unsupported config #{name}/#{key}"
@@ -54,6 +56,7 @@ class AMQProxy::CLI
     @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
     @log_level = ENV["LOG_LEVEL"]?.try { |level| ::Log::Severity.parse(level) } || @log_level
     @idle_connection_timeout = ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i || @idle_connection_timeout
+    @max_upstream_channels = ENV["MAX_UPSTREAM_CHANNELS"]?.try &.to_u16 || @max_upstream_channels
     @term_timeout = ENV["TERM_TIMEOUT"]?.try &.to_i || @term_timeout
     @term_client_close_timeout = ENV["TERM_CLIENT_CLOSE_TIMEOUT"]?.try &.to_i || @term_client_close_timeout
     @upstream = ENV["AMQP_URL"]? || @upstream
@@ -80,6 +83,9 @@ class AMQProxy::CLI
       parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| @http_port = v.to_i }
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maximum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
+      end
+      parser.on("--max-upstream-channels=CHANNELS", "Maximum channels per upstream connection (default: server max or 65535)") do |v|
+        @max_upstream_channels = v.to_u16
       end
       parser.on("--term-timeout=SECONDS", "At TERM the server waits SECONDS seconds for clients to gracefully close their sockets after Close has been sent (default: infinite)") do |v|
         @term_timeout = v.to_i
@@ -117,7 +123,7 @@ class AMQProxy::CLI
     Signal::INT.trap &->self.initiate_shutdown(Signal)
     Signal::TERM.trap &->self.initiate_shutdown(Signal)
 
-    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
+    server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout, @max_upstream_channels)
 
     HTTPServer.new(server, @listen_address, @http_port.to_i)
     server.listen(@listen_address, @listen_port.to_i)
