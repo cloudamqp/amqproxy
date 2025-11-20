@@ -10,7 +10,6 @@ Log.setup_from_env(default_level: :error)
 MAYBE_SUDO = (ENV.has_key?("NO_SUDO") || `id -u` == "0\n") ? "" : "sudo "
 
 UPSTREAM_URL = begin
-#  URI.parse ENV.fetch("UPSTREAM_URL", "amqp://127.0.0.1:5672?idle_connection_timeout=5&max_upstream_channels=65535")
   URI.parse ENV.fetch("UPSTREAM_URL", "amqp://127.0.0.1:5672?idle_connection_timeout=5")
 rescue e : URI::Error
   puts "Invalid UPSTREAM_URL: #{e}"
