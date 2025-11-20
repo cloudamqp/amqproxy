@@ -10,14 +10,19 @@ Log.setup_from_env(default_level: :error)
 MAYBE_SUDO = (ENV.has_key?("NO_SUDO") || `id -u` == "0\n") ? "" : "sudo "
 
 UPSTREAM_URL = begin
+#  URI.parse ENV.fetch("UPSTREAM_URL", "amqp://127.0.0.1:5672?idle_connection_timeout=5&max_upstream_channels=65535")
   URI.parse ENV.fetch("UPSTREAM_URL", "amqp://127.0.0.1:5672?idle_connection_timeout=5")
 rescue e : URI::Error
   puts "Invalid UPSTREAM_URL: #{e}"
   exit 1
 end
 
-def with_server(idle_connection_timeout = 5, &)
-  server = AMQProxy::Server.new(UPSTREAM_URL)
+def with_server(idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX, &)
+  tls = UPSTREAM_URL.scheme == "amqps"
+  host = UPSTREAM_URL.host || "127.0.0.1"
+  port = UPSTREAM_URL.port || 5672
+  port = 5671 if tls && UPSTREAM_URL.port.nil?
+  server = AMQProxy::Server.new(host, port, tls, idle_connection_timeout, max_upstream_channels)
   tcp_server = TCPServer.new("127.0.0.1", 0)
   amqp_url = "amqp://#{tcp_server.local_address}"
   spawn { server.listen(tcp_server) }
