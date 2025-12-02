@@ -3,6 +3,8 @@ require "amq-protocol"
 require "./version"
 require "./upstream"
 require "./records"
+require "./tracer"
+require "./nil_tracer"
 
 module AMQProxy
   class Client
@@ -14,8 +16,9 @@ module AMQProxy
     @channel_max : UInt16
     @heartbeat : UInt16
     @last_heartbeat = Time.monotonic
+    @tracer : Tracer
 
-    def initialize(@socket : TCPSocket)
+    def initialize(@socket : TCPSocket, @tracer = NilTracer)
       set_socket_options(@socket)
       tune_ok, @credentials = negotiate(@socket)
       @frame_max = tune_ok.frame_max
@@ -42,11 +45,17 @@ module AMQProxy
 
     private def finish_publish(channel)
       buffer = @publish_buffers[channel]
-      if upstream_channel = @channel_map[channel]
-        upstream_channel.write(buffer.publish)
-        upstream_channel.write(buffer.header)
-        buffer.bodies.each do |body|
-          upstream_channel.write(body)
+      @tracer.trace("amqp.publish", buffer.publish.exchange, {
+        amqp_exchange:    buffer.publish.exchange,
+        amqp_routing_key: buffer.publish.routing_key,
+        amqp_body_size:   buffer.header.body_size.to_s,
+      }) do
+        if upstream_channel = @channel_map[channel]
+          upstream_channel.write(buffer.publish)
+          upstream_channel.write(buffer.header)
+          buffer.bodies.each do |body|
+            upstream_channel.write(body)
+          end
         end
       end
     ensure

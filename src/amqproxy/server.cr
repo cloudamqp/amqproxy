@@ -5,23 +5,26 @@ require "uri"
 require "./channel_pool"
 require "./client"
 require "./upstream"
+require "./tracer"
+require "./nil_tracer"
 
 module AMQProxy
   class Server
     Log = ::Log.for(self)
     @clients_lock = Mutex.new
     @clients = Array(Client).new
+    @tracer : Tracer
 
-    def self.new(url : URI)
+    def self.new(url : URI, tracer = NilTracer.new)
       tls = url.scheme == "amqps"
       host = url.host || "127.0.0.1"
       port = url.port || 5762
       port = 5671 if tls && url.port.nil?
       idle_connection_timeout = url.query_params.fetch("idle_connection_timeout", 5).to_i
-      new(host, port, tls, idle_connection_timeout)
+      new(host, port, tls, idle_connection_timeout, tracer)
     end
 
-    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5)
+    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5, @tracer = NilTracer.new)
       tls_ctx = OpenSSL::SSL::Context::Client.new if upstream_tls
       @channel_pools = Hash(Credentials, ChannelPool).new do |hash, credentials|
         hash[credentials] = ChannelPool.new(upstream_host, upstream_port, tls_ctx, credentials, idle_connection_timeout)
@@ -45,12 +48,10 @@ module AMQProxy
       Log.info { "Proxy listening on #{server.local_address}" }
       loop do
         socket = server.accept? || break
-        begin
-          addr = socket.remote_address
-          spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
-        rescue IO::Error
-          next
-        end
+        addr = socket.remote_address
+        spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
+      rescue IO::Error
+        next
       end
       Log.info { "Proxy stopping accepting connections" }
     end
@@ -74,7 +75,9 @@ module AMQProxy
     end
 
     private def handle_connection(socket, remote_address)
-      c = Client.new(socket)
+      c = @tracer.trace("client.connection", remote_address.to_s) do
+        Client.new(socket, @tracer)
+      end
       active_client(c) do
         channel_pool = @channel_pools[c.credentials]
         c.read_loop(channel_pool)
