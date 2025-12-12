@@ -32,7 +32,7 @@ jobs:
           outputs: builds
 
       - name: Upload github artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           path: builds/**/*.tar.gz
           name: tar
@@ -78,7 +78,7 @@ jobs:
           outputs: builds
 
       - name: Upload GitHub artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           path: "builds/**/*.deb"
           name: debs-${{ matrix.os }}
@@ -143,7 +143,7 @@ jobs:
             version=${{ env.version }}
           outputs: RPMS
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         name: Upload artifact
         with:
           name: rpm-packages-${{ matrix.os }}
