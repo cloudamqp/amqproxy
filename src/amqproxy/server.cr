@@ -5,12 +5,14 @@ require "uri"
 require "./channel_pool"
 require "./client"
 require "./upstream"
+require "./connection_info"
 
 module AMQProxy
   class Server
     Log = ::Log.for(self)
     @clients_lock = Mutex.new
     @clients = Array(Client).new
+    @closed = false
 
     def self.new(url : URI)
       tls = url.scheme == "amqps"
@@ -46,13 +48,63 @@ module AMQProxy
       loop do
         socket = server.accept? || break
         begin
-          addr = socket.remote_address
-          spawn handle_connection(socket, addr), name: "Client#read_loop #{addr}"
+          remote_addr = socket.remote_address
+          set_socket_options(socket)
+          conn_info = ConnectionInfo.new(remote_addr, socket.local_address)
+          spawn handle_connection(socket, conn_info), name: "Client#read_loop #{remote_addr}"
         rescue IO::Error
           next
         end
       end
       Log.info { "Proxy stopping accepting connections" }
+    end
+
+    def listen_tls(address, port, context)
+      listen_tls(TCPServer.new(address, port), context)
+    end
+
+    def listen_tls(s : TCPServer, context)
+      # @listeners[s] = protocol
+      Log.info { "Listening on #{s.local_address} (TLS)" }
+      loop do # do not try to use while
+        client = s.accept? || break
+        next client.close if @closed
+        accept_tls(client, context)
+      end
+    rescue ex : IO::Error | OpenSSL::Error
+      abort "Unrecoverable error in TLS listener: #{ex.inspect_with_backtrace}"
+      # ensure
+      #  @listeners.delete(s)
+    end
+
+    private def accept_tls(client, context)
+      if context
+        spawn(name: "Accept TLS socket") do
+          remote_addr = client.remote_address
+          set_socket_options(client)
+          ssl_client = OpenSSL::SSL::Socket::Server.new(client, context, sync_close: true)
+          # ssl_client = OpenSSL::SSL::Socket.new(client, context, sync_close: true)
+          set_buffer_size(ssl_client)
+          Log.debug { "#{remote_addr} connected with #{ssl_client.tls_version} #{ssl_client.cipher}" }
+          conn_info = ConnectionInfo.new(remote_addr, client.local_address)
+          conn_info.ssl = true
+          conn_info.ssl_version = ssl_client.tls_version
+          conn_info.ssl_cipher = ssl_client.cipher
+          handle_connection(ssl_client, conn_info)
+        rescue ex
+          Log.warn(exception: ex) { "Error accepting TLS connection from #{remote_addr}" }
+          client.close rescue nil
+        end
+      end
+    end
+
+    def listen_tls(bind, port, context)
+      listen_tls(TCPServer.new(bind, port), context)
+    end
+
+    private def set_buffer_size(socket)
+      socket.sync = true
+      socket.read_buffering = false
     end
 
     def stop_accepting_clients
@@ -73,8 +125,8 @@ module AMQProxy
       end
     end
 
-    private def handle_connection(socket, remote_address)
-      c = Client.new(socket)
+    private def handle_connection(socket, connection_info)
+      c = Client.new(socket, connection_info)
       active_client(c) do
         channel_pool = @channel_pools[c.credentials]
         c.read_loop(channel_pool)
@@ -82,9 +134,24 @@ module AMQProxy
     rescue IO::EOFError
       # Client closed connection before/while negotiating
     rescue ex # only raise from constructor, when negotating
-      Log.debug(exception: ex) { "Client negotiation failure (#{remote_address}) #{ex.inspect}" }
+      Log.debug(exception: ex) { "Client negotiation failure (#{connection_info.remote_address}) #{ex.inspect}" }
     ensure
       socket.close rescue nil
+    end
+
+    private def set_socket_options(socket)
+      # Note:  Very minimal support for socket options for now
+      unless socket.remote_address.loopback?
+        # if keepalive = @config.tcp_keepalive
+        socket.keepalive = true
+        socket.tcp_keepalive_idle = 60
+        socket.tcp_keepalive_interval = 10
+        socket.tcp_keepalive_count = 3
+        # end
+      end
+      socket.tcp_nodelay = true # if @config.tcp_nodelay?
+      # @config.tcp_recv_buffer_size.try { |v| socket.recv_buffer_size = v }
+      # @config.tcp_send_buffer_size.try { |v| socket.send_buffer_size = v }
     end
 
     private def active_client(client, &)
