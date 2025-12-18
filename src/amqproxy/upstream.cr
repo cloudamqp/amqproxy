@@ -57,7 +57,12 @@ module AMQProxy
     end
 
     def close_channel(id, code, reason)
-      send AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
+      # Only send Channel::Close if the channel is still open (exists in our map)
+      @channels_lock.synchronize do
+        if @channels.has_key?(id)
+          send AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
+        end
+      end
     end
 
     def channels

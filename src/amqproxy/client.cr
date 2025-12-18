@@ -74,6 +74,33 @@ module AMQProxy
           upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
           @channel_map[frame.channel] = upstream_channel
           write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+        when AMQ::Protocol::Frame::Channel::Close
+          src_channel = frame.channel
+          begin
+            upstream_channel = @channel_map[frame.channel]?
+            if upstream_channel.nil?
+              # Channel is already closing (value is nil) or doesn't exist
+              if @channel_map.has_key?(frame.channel)
+                # Channel exists but is nil (already closing from upstream side)
+                # Send CloseOk to acknowledge the client's close request
+                write AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+                @channel_map.delete(frame.channel)
+              else
+                # Channel doesn't exist at all - error condition
+                close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
+              end
+            else
+              # Channel is open, forward the close to upstream
+              begin
+                upstream_channel.write(frame)
+                # Mark channel as closing so close_all_upstream_channels won't try to close it again
+                @channel_map[frame.channel] = nil
+              rescue ex : Upstream::WriteError
+                # Upstream write failed, send error close to client
+                close_channel(src_channel, 500_u16, "UPSTREAM_ERROR")
+              end
+            end
+          end
         when AMQ::Protocol::Frame::Channel::CloseOk
           # Server closed channel, CloseOk reply to server is already sent
           @channel_map.delete(frame.channel)
@@ -149,7 +176,9 @@ module AMQProxy
       end
       case frame
       when AMQ::Protocol::Frame::Channel::Close
-        @channel_map[frame.channel] = nil
+        if @channel_map[frame.channel]
+          @channel_map[frame.channel] = nil
+        end
       when AMQ::Protocol::Frame::Channel::CloseOk
         @channel_map.delete(frame.channel)
       when AMQ::Protocol::Frame::Connection::CloseOk
@@ -170,7 +199,10 @@ module AMQProxy
     end
 
     def close_channel(id, code, reason)
-      write AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
+      # Only send Channel::Close if we haven't already sent one
+      if @channel_map[id]?
+        write AMQ::Protocol::Frame::Channel::Close.new(id, code, reason, 0_u16, 0_u16)
+      end
     end
 
     private def close_all_upstream_channels(code = 500_u16, reason = "CLIENT_DISCONNECTED")
