@@ -264,6 +264,12 @@ describe AMQProxy::Server do
     with_server do |server, proxy_url|
       Fiber.yield
 
+      # Open a canary connection to verify the upstream connection stays open
+      # If the bug exists, duplicate Channel::Close will close the upstream connection,
+      # affecting ALL clients sharing that connection
+      canary = AMQP::Client.new(proxy_url).connect
+      canary_channel = canary.channel
+
       # Open multiple channels and close them rapidly, then crash
       # This increases the probability of triggering the race condition
       num_channels = 10
@@ -284,9 +290,9 @@ describe AMQProxy::Server do
       # Give the proxy time to process the disconnect
       sleep 0.3.seconds
 
-      # The upstream connection should still be open (not 0)
-      # If duplicate Channel::Close was sent, upstream would have closed the connection
-      # with error: "expected 'channel.open'"
+      # Verify the canary connection is still alive (proves upstream connection didn't close)
+      canary.closed?.should be_false
+      canary_channel.closed?.should be_false
       server.upstream_connections.should eq 1
     end
   end
@@ -294,6 +300,12 @@ describe AMQProxy::Server do
   it "does not send duplicate channel.close when upstream initiates close and client crashes" do
     with_server do |server, proxy_url|
       Fiber.yield
+
+      # Open a canary connection to verify the upstream connection stays open
+      # If the bug exists, duplicate Channel::Close will close the upstream connection,
+      # affecting ALL clients sharing that connection
+      canary = AMQP::Client.new(proxy_url).connect
+      canary_channel = canary.channel
 
       conn = AMQP::Client.new(proxy_url).connect
       ch = conn.channel
@@ -312,8 +324,10 @@ describe AMQProxy::Server do
       # Give the proxy time to process the disconnect
       sleep 0.2.seconds
 
-      # The upstream connection should still be open (not 0)
+      # Verify the canary connection is still alive (proves upstream connection didn't close)
       # The proxy already sent CloseOk to upstream when it received Channel::Close
+      canary.closed?.should be_false
+      canary_channel.closed?.should be_false
       server.upstream_connections.should eq 1
     end
   end
