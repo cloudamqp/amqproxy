@@ -74,6 +74,14 @@ module AMQProxy
           upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
           @channel_map[frame.channel] = upstream_channel
           write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+        when AMQ::Protocol::Frame::Channel::Close
+          if upstream_channel = @channel_map.delete(frame.channel)
+            # Channel was open, forward close to upstream
+            upstream_channel.write(frame)
+          else
+            # Channel doesn't exist
+            close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
+          end
         when AMQ::Protocol::Frame::Channel::CloseOk
           # Server closed channel, CloseOk reply to server is already sent
           @channel_map.delete(frame.channel)
@@ -148,9 +156,8 @@ module AMQProxy
         @socket.flush unless expect_more_frames?(frame)
       end
       case frame
-      when AMQ::Protocol::Frame::Channel::Close
-        @channel_map[frame.channel] = nil
-      when AMQ::Protocol::Frame::Channel::CloseOk
+      when AMQ::Protocol::Frame::Channel::Close,
+           AMQ::Protocol::Frame::Channel::CloseOk
         @channel_map.delete(frame.channel)
       when AMQ::Protocol::Frame::Connection::CloseOk
         @socket.close rescue nil
