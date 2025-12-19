@@ -259,4 +259,163 @@ describe AMQProxy::Server do
       end
     end
   end
+
+  it "does not send duplicate channel.close frames when client crashes after sending close" do
+    with_server do |server, proxy_url|
+      Fiber.yield
+      uri = URI.parse(proxy_url)
+
+      # Open multiple channels and close them rapidly, then crash
+      # This increases the probability of triggering the race condition
+      num_channels = 10
+
+      socket = TCPSocket.new(uri.host.not_nil!, uri.port.not_nil!)
+      socket.sync = false
+
+      # AMQP handshake
+      socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+      start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(
+        response: "\u0000guest\u0000guest",
+        client_properties: AMQ::Protocol::Table.new,
+        mechanism: "PLAIN",
+        locale: "en_US"
+      )
+      socket.write_bytes start_ok, IO::ByteFormat::NetworkEndian
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+      tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(2047_u16, 131072_u32, 0_u16)
+      socket.write_bytes tune_ok, IO::ByteFormat::NetworkEndian
+      socket.flush
+      open = AMQ::Protocol::Frame::Connection::Open.new(vhost: "/")
+      socket.write_bytes open, IO::ByteFormat::NetworkEndian
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+
+      # Open multiple channels
+      1_u16.upto(num_channels.to_u16) do |ch_id|
+        channel_open = AMQ::Protocol::Frame::Channel::Open.new(ch_id)
+        socket.write_bytes channel_open, IO::ByteFormat::NetworkEndian
+      end
+      socket.flush
+
+      # Read all Channel::OpenOk responses
+      num_channels.times do
+        AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+          .as(AMQ::Protocol::Frame::Channel::OpenOk)
+      end
+
+      sleep 0.1.seconds
+      server.upstream_connections.should eq 1
+
+      # Send Channel::Close for ALL channels rapidly without waiting for CloseOk
+      1_u16.upto(num_channels.to_u16) do |ch_id|
+        channel_close = AMQ::Protocol::Frame::Channel::Close.new(ch_id, 200_u16, "Normal close", 0_u16, 0_u16)
+        socket.write_bytes channel_close, IO::ByteFormat::NetworkEndian
+      end
+      socket.flush
+
+      # Simulate crash: close socket abruptly WITHOUT waiting for any CloseOk
+      socket.close
+
+      # Give the proxy time to process the disconnect
+      sleep 0.3.seconds
+
+      # The upstream connection should still be open
+      # If duplicate Channel::Close was sent, upstream would have closed the connection
+      # with error: "expected 'channel.open'"
+      server.upstream_connections.should eq 1
+
+      # Verify we can still use the upstream connection with another client
+      AMQP::Client.start(proxy_url) do |conn|
+        ch = conn.channel
+        ch.basic_publish_confirm "test", "amq.fanout"
+      end
+
+      sleep 0.1.seconds
+      server.upstream_connections.should eq 1
+    end
+  end
+
+  it "does not send duplicate channel.close when upstream initiates close and client crashes" do
+    with_server do |server, proxy_url|
+      Fiber.yield
+      uri = URI.parse(proxy_url)
+
+      # Use low-level socket to control the exact frame sequence
+      socket = TCPSocket.new(uri.host.not_nil!, uri.port.not_nil!)
+      socket.sync = false
+
+      # AMQP handshake
+      socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+      start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(
+        response: "\u0000guest\u0000guest",
+        client_properties: AMQ::Protocol::Table.new,
+        mechanism: "PLAIN",
+        locale: "en_US"
+      )
+      socket.write_bytes start_ok, IO::ByteFormat::NetworkEndian
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+      tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(2047_u16, 131072_u32, 0_u16)
+      socket.write_bytes tune_ok, IO::ByteFormat::NetworkEndian
+      socket.flush
+      open = AMQ::Protocol::Frame::Connection::Open.new(vhost: "/")
+      socket.write_bytes open, IO::ByteFormat::NetworkEndian
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+
+      # Open a channel
+      channel_open = AMQ::Protocol::Frame::Channel::Open.new(1_u16)
+      socket.write_bytes channel_open, IO::ByteFormat::NetworkEndian
+      socket.flush
+      AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+
+      # Now the upstream connection should exist (created when channel was opened)
+      sleep 0.1.seconds
+      server.upstream_connections.should eq 1
+
+      # Trigger a channel error by consuming from non-existent queue
+      # This will cause the upstream to send Channel::Close
+      basic_consume = AMQ::Protocol::Frame::Basic::Consume.new(
+        channel: 1_u16,
+        reserved1: 0_u16,
+        queue: "non_existent_queue_#{rand}",
+        consumer_tag: "test",
+        no_local: false,
+        no_ack: false,
+        exclusive: false,
+        no_wait: false,
+        arguments: AMQ::Protocol::Table.new
+      )
+      socket.write_bytes basic_consume, IO::ByteFormat::NetworkEndian
+      socket.flush
+
+      # Read the Channel::Close from the server (forwarded through proxy)
+      frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+      frame.should be_a(AMQ::Protocol::Frame::Channel::Close)
+
+      # Simulate client crash: close socket WITHOUT sending CloseOk
+      socket.close
+
+      # Give the proxy time to process the disconnect
+      sleep 0.2.seconds
+
+      # The upstream connection should still be open
+      # The proxy should have already sent CloseOk to upstream when it received Channel::Close
+      server.upstream_connections.should eq 1
+
+      # Verify we can still use the upstream connection
+      AMQP::Client.start(proxy_url) do |conn|
+        ch = conn.channel
+        ch.basic_publish_confirm "test", "amq.fanout"
+      end
+
+      sleep 0.1.seconds
+      server.upstream_connections.should eq 1
+    end
+  end
 end
