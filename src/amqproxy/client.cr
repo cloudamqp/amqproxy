@@ -8,7 +8,7 @@ module AMQProxy
   class Client
     Log = ::Log.for(self)
     getter credentials : Credentials
-    @channel_map = Hash(UInt16, UpstreamChannel?).new
+    @channel_map = Hash(UInt16, UpstreamChannel).new
     @lock = Mutex.new
     @frame_max : UInt32
     @channel_max : UInt16
@@ -182,7 +182,7 @@ module AMQProxy
 
     private def close_all_upstream_channels(code = 500_u16, reason = "CLIENT_DISCONNECTED")
       @channel_map.each_value do |upstream_channel|
-        upstream_channel.try &.close(code, reason)
+        upstream_channel.close(code, reason)
       rescue Upstream::WriteError
         Log.debug { "Upstream write error while closing client's channels" }
         next # Nothing to do
