@@ -48,6 +48,7 @@ jobs:
           - ubuntu-noble    # Ubuntu 24.04
           - ubuntu-jammy    # Ubuntu 22.04
           - ubuntu-focal    # Ubuntu 20.04
+          - debian-trixie   # Debian 13
           - debian-bookworm # Debian 12
           - debian-bullseye # Debian 11
       fail-fast: false
