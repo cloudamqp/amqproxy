@@ -11,12 +11,17 @@ class AMQProxy::CLI
 
   @listen_address = "localhost"
   @listen_port = 5673
+  @tls_port = 5674
   @http_port = 15673
   @log_level : ::Log::Severity = ::Log::Severity::Info
   @idle_connection_timeout : Int32 = 5
   @term_timeout = -1
   @term_client_close_timeout = 0
   @server : AMQProxy::Server? = nil
+  @tls_context : OpenSSL::SSL::Context::Server?
+  @tls_key_path = ""
+  @tls_cert_path = ""
+  @tls_ciphers = ""
 
   def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
     INI.parse(File.read(path)).each do |name, section|
@@ -36,8 +41,11 @@ class AMQProxy::CLI
         section.each do |key, value|
           case key
           when "port"            then @listen_port = value.to_i
+          when "tls_port"        then @tls_port = value.to_i
           when "bind", "address" then @listen_address = value
           when "log_level"       then @log_level = ::Log::Severity.parse(value)
+          when "tls_cert_path"   then @tls_cert_path = value
+          when "tls_key_path"    then @tls_key_path = value
           else                        raise "Unsupported config #{name}/#{key}"
           end
         end
@@ -51,6 +59,7 @@ class AMQProxy::CLI
   def apply_env_variables
     @listen_address = ENV["LISTEN_ADDRESS"]? || @listen_address
     @listen_port = ENV["LISTEN_PORT"]?.try &.to_i || @listen_port
+    @tls_port = ENV["TLS_PORT"]?.try &.to_i || @tls_port
     @http_port = ENV["HTTP_PORT"]?.try &.to_i || @http_port
     @log_level = ENV["LOG_LEVEL"]?.try { |level| ::Log::Severity.parse(level) } || @log_level
     @idle_connection_timeout = ENV["IDLE_CONNECTION_TIMEOUT"]?.try &.to_i || @idle_connection_timeout
@@ -77,6 +86,9 @@ class AMQProxy::CLI
         @listen_address = v
       end
       parser.on("-p PORT", "--port=PORT", "Port to listen on (default: 5673)") { |v| @listen_port = v.to_i }
+      parser.on("-x PORT", "--port_tls=PORT", "Port with TLS to listen on (default: 5674)") { |v| @tls_port = v.to_i }
+      parser.on("-c CERT_PATH", "--cert_path=PATH", "Path for certificate chain") { |v| @tls_cert_path = v }
+      parser.on("-k KEY_PATH", "--key_path=PATH", "Path for certificate key") { |v| @tls_key_path = v }
       parser.on("-b PORT", "--http-port=PORT", "HTTP Port to listen on (default: 15673)") { |v| @http_port = v.to_i }
       parser.on("-t IDLE_CONNECTION_TIMEOUT", "--idle-connection-timeout=SECONDS", "Maximum time in seconds an unused pooled connection stays open (default 5s)") do |v|
         @idle_connection_timeout = v.to_i
@@ -120,7 +132,20 @@ class AMQProxy::CLI
     server = @server = AMQProxy::Server.new(u.hostname || "", port, tls, @idle_connection_timeout)
 
     HTTPServer.new(server, @listen_address, @http_port.to_i)
-    server.listen(@listen_address, @listen_port.to_i)
+
+    if @tls_key_path == ""
+      server.listen(@listen_address, @listen_port.to_i)
+    else
+      # start the TLS listener for amproxy
+
+      @tls_context = create_tls_context
+      reload_tls_context
+      if @tls_context
+        server.listen_tls(@listen_address, @tls_port.to_i, @tls_context)
+      else
+        server.listen(@listen_address, @listen_port.to_i)
+      end
+    end
 
     shutdown
 
@@ -187,6 +212,22 @@ class AMQProxy::CLI
       ch.close
       Log.info { "Timeout waiting for clients to close their connections." }
     end
+  end
+
+  private def create_tls_context
+    context = OpenSSL::SSL::Context::Server.new
+    context.add_options(OpenSSL::SSL::Options.new(0x40000000)) # disable client initiated renegotiation
+    context
+  end
+
+  private def reload_tls_context
+    return unless tls = @tls_context
+
+    # Note minimal configuration of TLS for now
+    tls.remove_options(OpenSSL::SSL::Options::NO_TLS_V1_2)
+    tls.certificate_chain = @tls_cert_path
+    tls.private_key = @tls_key_path.empty? ? @tls_cert_path : @tls_key_path
+    tls.ciphers = @tls_ciphers unless @tls_ciphers.empty?
   end
 
   struct Journal::LogFormat < ::Log::StaticFormatter

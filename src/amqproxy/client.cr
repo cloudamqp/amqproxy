@@ -3,11 +3,13 @@ require "amq-protocol"
 require "./version"
 require "./upstream"
 require "./records"
+require "./connection_info"
 
 module AMQProxy
   class Client
     Log = ::Log.for(self)
     getter credentials : Credentials
+    getter connection_info : ConnectionInfo
     @channel_map = Hash(UInt16, UpstreamChannel?).new
     @lock = Mutex.new
     @frame_max : UInt32
@@ -15,8 +17,7 @@ module AMQProxy
     @heartbeat : UInt16
     @last_heartbeat = Time.monotonic
 
-    def initialize(@socket : TCPSocket)
-      set_socket_options(@socket)
+    def initialize(@socket : IO, @connection_info : ConnectionInfo)
       tune_ok, @credentials = negotiate(@socket)
       @frame_max = tune_ok.frame_max
       @channel_max = tune_ok.channel_max
@@ -55,10 +56,12 @@ module AMQProxy
 
     # frames from enduser
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(client: socket.remote_address.to_s)
+      Log.context.set(client: @connection_info.remote_address.to_s)
       Log.debug { "Connected" }
       i = 0u64
-      socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
+      if @heartbeat > 0 && socket.responds_to?(:read_timeout=)
+        socket.read_timeout = (@heartbeat / 2).ceil.seconds
+      end
       loop do
         frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
         @last_heartbeat = Time.monotonic
@@ -205,12 +208,14 @@ module AMQProxy
     end
 
     private def set_socket_options(socket = @socket)
-      socket.sync = false
-      socket.keepalive = true
-      socket.tcp_nodelay = true
-      socket.tcp_keepalive_idle = 60
-      socket.tcp_keepalive_count = 3
-      socket.tcp_keepalive_interval = 10
+      # For SSL sockets, configure the underlying TCP socket
+      tcp_socket = socket.is_a?(OpenSSL::SSL::Socket::Server) ? socket.io : socket
+      tcp_socket.sync = false
+      tcp_socket.keepalive = true
+      tcp_socket.tcp_nodelay = true
+      tcp_socket.tcp_keepalive_idle = 60
+      tcp_socket.tcp_keepalive_count = 3
+      tcp_socket.tcp_keepalive_interval = 10
     end
 
     private def negotiate(socket = @socket)
