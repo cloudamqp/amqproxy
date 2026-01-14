@@ -204,7 +204,7 @@ module AMQProxy
       case tune = AMQ::Protocol::Frame.from_io(@socket)
       when AMQ::Protocol::Frame::Connection::Tune
         server_max = tune.channel_max.zero? ? UInt16::MAX : tune.channel_max
-        max_upstream_channels = @max_upstream_channels.zero? ? UInt16::MAX : @max_upstream_channels 
+        max_upstream_channels = @max_upstream_channels.zero? ? UInt16::MAX : @max_upstream_channels
         channel_max = Math.min(server_max, max_upstream_channels)
         frame_max = tune.frame_max.zero? ? 131072_u32 : Math.min(131072_u32, tune.frame_max)
         tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(channel_max, frame_max, tune.heartbeat)
