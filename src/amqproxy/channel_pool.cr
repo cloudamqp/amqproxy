@@ -9,7 +9,7 @@ module AMQProxy
     @lock = Mutex.new
     @upstreams = Deque(Upstream).new
 
-    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @credentials : Credentials, @idle_connection_timeout : Int32)
+    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @credentials : Credentials, @idle_connection_timeout : Int32, @max_upstream_channels : UInt16)
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
@@ -36,7 +36,7 @@ module AMQProxy
     end
 
     private def add_upstream
-      upstream = Upstream.new(@host, @port, @tls_ctx, @credentials)
+      upstream = Upstream.new(@host, @port, @tls_ctx, @credentials, @max_upstream_channels)
       Log.info { "Adding upstream connection" }
       @upstreams.unshift upstream
       spawn(name: "Upstream#read_loop") do

@@ -21,10 +21,10 @@ module AMQProxy
       new(host, port, tls, idle_connection_timeout)
     end
 
-    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5)
+    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX)
       tls_ctx = OpenSSL::SSL::Context::Client.new if upstream_tls
       @channel_pools = Hash(Credentials, ChannelPool).new do |hash, credentials|
-        hash[credentials] = ChannelPool.new(upstream_host, upstream_port, tls_ctx, credentials, idle_connection_timeout)
+        hash[credentials] = ChannelPool.new(upstream_host, upstream_port, tls_ctx, credentials, idle_connection_timeout, max_upstream_channels)
       end
       Log.info { "Proxy upstream: #{upstream_host}:#{upstream_port} #{upstream_tls ? "TLS" : ""}" }
     end

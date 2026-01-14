@@ -90,6 +90,19 @@ describe AMQProxy::Server do
     end
   end
 
+  it "creates multiple upstreams when max_upstream_channels is low" do
+    with_server(max_upstream_channels: 10_u16) do |server, proxy_url|
+      AMQP::Client.start(proxy_url) do |conn|
+        25.times { conn.channel }
+        server.client_connections.should eq 1
+        server.upstream_connections.should be >= 3
+      end
+      sleep 0.1.seconds
+      server.client_connections.should eq 0
+      server.upstream_connections.should eq 3
+    end
+  end
+
   it "can reconnect if upstream closes" do
     with_server do |server, proxy_url|
       Fiber.yield
