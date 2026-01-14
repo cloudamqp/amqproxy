@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.1.0] - 2026-01-14
+
+### Added
+
+- Added configurable max channels per upstream connection [#227](https://github.com/cloudamqp/amqproxy/pull/227)
+- Build packages for Debian 13
+
+### Fixed
+
+- Fix duplicate channel.close frames when client crashes
+
+### Changed
+
+- Base the container on debian-12-slim instead of alpine
+- Improve specs with canary connection to verify upstream stays open
+- Update issue templates for bug reports and feature requests [#229](https://github.com/cloudamqp/amqproxy/pull/229)
+
 ## [v3.0.2] - 2025-11-14
 
 - Close downstream connections when upstream connection closes. [#220](https://github.com/cloudamqp/amqproxy/pull/220)
