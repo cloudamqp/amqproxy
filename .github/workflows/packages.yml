@@ -73,7 +73,7 @@ jobs:
           file: Dockerfile.deb
           platforms: linux/amd64,linux/arm64
           build-args: |
-            image=84codes/crystal:1.15.1-${{ matrix.os }}
+            build_image=84codes/crystal:1.18.2-${{ matrix.os }}
             version=${{ env.version }}
           outputs: builds
 
@@ -139,7 +139,7 @@ jobs:
           file: Dockerfile.rpm
           platforms: linux/amd64,linux/arm64
           build-args: |
-            build_image=84codes/crystal:1.15.1-${{ matrix.os }}
+            build_image=84codes/crystal:1.18.2-${{ matrix.os }}
             version=${{ env.version }}
           outputs: RPMS
 
