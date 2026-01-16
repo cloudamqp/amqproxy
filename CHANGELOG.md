@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.1.2] - 2026-01-16
+- Fix deb build to use correct Docker build arg name [#239](https://github.com/cloudamqp/amqproxy/pull/239)
+
 ## [v3.1.1] - 2026-01-15
 - Fix packagecloud uploads [#237](https://github.com/cloudamqp/amqproxy/pull/237)
 
