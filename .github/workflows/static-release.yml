@@ -1,0 +1,37 @@
+name: Upload static packages to release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  static:
+    name: Build and upload static packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build static tar package
+        uses: docker/build-push-action@v6
+        with:
+          file: tar.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          outputs: builds
+          cache-from: type=gha,scope=static-release
+          cache-to: type=gha,mode=max,scope=static-release
+
+      - name: Upload to release
+        run: gh release upload "${{ github.event.release.tag_name }}" builds/**/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
