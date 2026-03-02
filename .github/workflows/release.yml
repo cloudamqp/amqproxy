@@ -7,7 +7,7 @@ on:
 name: Create Release
 
 jobs:
-  build:
+  release:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
@@ -16,25 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build static tar package
-        uses: docker/build-push-action@v6
-        with:
-          file: tar.Dockerfile
-          platforms: linux/amd64,linux/arm64
-          outputs: .
-          cache-from: type=gha,scope=release
-          cache-to: type=gha,mode=max,scope=release
-
-      - name: List files
-        run: ls -Rl
-
       - name: Create Release
-        run: gh release create "${{ github.ref }}" ./**/*.tar.gz --notes "$(./build/release_notes)"
+        run: gh release create "${{ github.ref }}" --notes "$(./build/release_notes)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
