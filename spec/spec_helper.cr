@@ -46,7 +46,7 @@ end
 def verify_running_amqp!
   tls = UPSTREAM_URL.scheme == "amqps"
   host = UPSTREAM_URL.host || "127.0.0.1"
-  port = UPSTREAM_URL.port || 5762
+  port = UPSTREAM_URL.port || 5672
   port = 5671 if tls && UPSTREAM_URL.port.nil?
   TCPSocket.new(host, port, connect_timeout: 3.seconds).close
 rescue Socket::ConnectError

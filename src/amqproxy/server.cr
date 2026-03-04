@@ -15,7 +15,7 @@ module AMQProxy
     def self.new(url : URI)
       tls = url.scheme == "amqps"
       host = url.host || "127.0.0.1"
-      port = url.port || 5762
+      port = url.port || 5672
       port = 5671 if tls && url.port.nil?
       idle_connection_timeout = url.query_params.fetch("idle_connection_timeout", 5).to_i
       new(host, port, tls, idle_connection_timeout)
