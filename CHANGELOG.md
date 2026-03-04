@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.1.3] - 2026-03-04
+
+- Fix default AMQP port typo [#243](https://github.com/cloudamqp/amqproxy/pull/243)
+
 ## [v3.1.2] - 2026-01-16
+
 - Fix deb build to use correct Docker build arg name [#239](https://github.com/cloudamqp/amqproxy/pull/239)
 
 ## [v3.1.1] - 2026-01-15
+
 - Fix packagecloud uploads [#237](https://github.com/cloudamqp/amqproxy/pull/237)
 
 ## [v3.1.0] - 2026-01-14
@@ -55,7 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metrics on http://listen_address:http_port/metrics
 - Don't log when a client just opens and closes a TCP connection
 - Compile static binary
-
 
 ## [v2.0.2] - 2024-08-25
 
@@ -158,9 +163,9 @@ No changes from 0.8.9.
 
 ## 0.8.3, 0.8.4, 0.8.5
 
-* 0.8.3 was tagged 2023-02-15 but a proper release was never created (release workflow failed)
-* 0.8.4 was tagged (and released) 2023-03-01 but it was built without bumping the version, so it reports 0.8.3
-* 0.8.5 was tagged 2023-03-01 but a proper release was never created (release workflow did not run)
+- 0.8.3 was tagged 2023-02-15 but a proper release was never created (release workflow failed)
+- 0.8.4 was tagged (and released) 2023-03-01 but it was built without bumping the version, so it reports 0.8.3
+- 0.8.5 was tagged 2023-03-01 but a proper release was never created (release workflow did not run)
 
 ## [0.8.2] - 2022-11-26
 
