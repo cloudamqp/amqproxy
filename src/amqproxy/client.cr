@@ -97,7 +97,7 @@ module AMQProxy
             else
               # Channel::Close is sent, waiting for CloseOk
             end
-          rescue ex : Upstream::WriteError
+          rescue Upstream::WriteError
             close_channel(src_channel, 500_u16, "UPSTREAM_ERROR")
           rescue KeyError
             close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
@@ -155,7 +155,7 @@ module AMQProxy
       when AMQ::Protocol::Frame::Connection::CloseOk
         @socket.close rescue nil
       end
-    rescue ex : IO::Error
+    rescue IO::Error
       # Client closed connection, suppress error
       @socket.close rescue nil
     end

@@ -18,7 +18,7 @@ class AMQProxy::CLI
   @term_client_close_timeout = 0
   @server : AMQProxy::Server? = nil
 
-  def parse_config(path) # ameba:disable Metrics/CyclomaticComplexity
+  def parse_config(path)
     INI.parse(File.read(path)).each do |name, section|
       case name
       when "main", ""

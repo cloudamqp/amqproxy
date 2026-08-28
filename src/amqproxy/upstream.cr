@@ -109,10 +109,6 @@ module AMQProxy
       close_all_downstream_client_connections
     end
 
-    def closed?
-      @socket.closed?
-    end
-
     private def close_all_downstream_client_connections(code = 500_u16, reason = "UPSTREAM_ERROR")
       clients = Set(Client).new
       @channels_lock.synchronize do
