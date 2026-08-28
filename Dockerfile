@@ -1,4 +1,4 @@
-FROM 84codes/crystal:1.17.0-debian-12 AS builder
+FROM 84codes/crystal:1.21.0-alpine AS builder
 WORKDIR /usr/src/amqproxy
 COPY shard.yml shard.lock ./
 RUN shards install --production

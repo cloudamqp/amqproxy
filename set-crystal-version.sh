@@ -12,7 +12,6 @@ fi
 files=(
   Dockerfile
   Dockerfile.rpm
-  deb.Dockerfile
   tar.Dockerfile
   spec/Dockerfile
   .github/workflows/ci.yml
