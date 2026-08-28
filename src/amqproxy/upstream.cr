@@ -267,7 +267,7 @@ module AMQProxy
     private def send_close_ok
       @socket.write_bytes AMQ::Protocol::Frame::Connection::CloseOk.new, IO::ByteFormat::NetworkEndian
       @socket.flush
-      @socket.close
+      @io.close # Stream#close is a noop
     end
 
     ClientProperties = AMQ::Protocol::Table.new({
