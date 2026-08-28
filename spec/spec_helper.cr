@@ -28,7 +28,7 @@ def wait_until(timeout = 5.seconds, &) : Bool
   true
 end
 
-ef with_server(idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX, &)
+def with_server(idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX, &)
   tls = UPSTREAM_URL.scheme == "amqps"
   host = UPSTREAM_URL.host || "127.0.0.1"
   port = UPSTREAM_URL.port || 5672
