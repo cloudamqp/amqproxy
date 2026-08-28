@@ -131,7 +131,7 @@ module AMQProxy
         end
         Fiber.yield if (i &+= 1) % 4096 == 0
       end
-    rescue ex : IO::Error | OpenSSL::SSL::Error
+    rescue ex : IO::Error | OpenSSL::SSL::Error | AMQ::Protocol::Error
       Log.info { "Connection error #{ex.inspect}" } unless @io.closed?
     ensure
       @done.close
