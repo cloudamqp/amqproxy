@@ -27,8 +27,7 @@ jobs:
     container: 84codes/crystal:latest-ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - run: shards install
-      - run: bin/ameba
+      - run: make lint
 
   format:
     runs-on: ubuntu-latest

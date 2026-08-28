@@ -174,16 +174,14 @@ describe AMQProxy::Server do
       server.client_connections.should eq 1
       server.upstream_connections.should eq 1 # since connection stays open
       spawn do
-        begin
-          AMQP::Client.start(proxy_url) do |conn|
-            conn.channel
-            wait_for_channel.send(-1) # send 4 (this should not happen)
-            sleep 1.seconds
-          end
-        rescue ex
-          # ex.message.should be "Error reading socket: Connection reset by peer"
-          wait_for_channel.send(4) # send 4
+        AMQP::Client.start(proxy_url) do |conn|
+          conn.channel
+          wait_for_channel.send(-1) # send 4 (this should not happen)
+          sleep 1.seconds
         end
+      rescue
+        # ex.message.should be "Error reading socket: Connection reset by peer"
+        wait_for_channel.send(4) # send 4
       end
       wait_for_channel.receive.should eq 4    # wait 4
       server.client_connections.should eq 1   # since the new connection should not have worked
