@@ -261,12 +261,10 @@ describe AMQProxy::Server do
         client = server.@clients.first?.should_not be_nil
         last_heartbeat = client.@last_heartbeat
         conn.channel
-        Fiber.yield
-        client.@last_heartbeat.should be > last_heartbeat
+        wait_until { client.@last_heartbeat > last_heartbeat }.should be_true, "Channel#Open didn't count as a heartbeat"
         last_heartbeat = client.@last_heartbeat
         conn.write AMQ::Protocol::Frame::Heartbeat.new
-        Fiber.yield
-        client.@last_heartbeat.should be > last_heartbeat
+        wait_until { client.@last_heartbeat > last_heartbeat }.should be_true, "Heartbeat didn't count as a heartbeat"
       end
     end
   end
