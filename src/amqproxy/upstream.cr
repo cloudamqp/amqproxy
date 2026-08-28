@@ -8,6 +8,7 @@ module AMQProxy
   class Upstream
     Log = ::Log.for(self)
     @socket : AMQ::Protocol::Stream
+    @io : TCPSocket | OpenSSL::SSL::Socket::Client
     @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
     @channel_max : UInt16
@@ -15,6 +16,10 @@ module AMQProxy
     @remote_address : String
     @channel_max : UInt16
     @frame_max : UInt32
+
+    # The largest frame we accept from the upstream server, we never negotiate
+    # a higher value in Connection#TuneOk
+    FRAME_MAX = 131_072_u32
 
     def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials, @max_upstream_channels : UInt16 = UInt16::MAX)
       tcp_socket = TCPSocket.new(@host, @port)
@@ -25,7 +30,7 @@ module AMQProxy
       tcp_socket.tcp_keepalive_interval = 10
       tcp_socket.tcp_nodelay = true
       @remote_address = tcp_socket.remote_address.to_s
-      socket =
+      @io =
         if tls_ctx = @tls_ctx
           tls_socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host)
           tls_socket.sync_close = true
@@ -33,7 +38,7 @@ module AMQProxy
         else
           tcp_socket
         end
-      @socket = AMQ::Protocol::Stream.new(socket)
+      @socket = AMQ::Protocol::Stream.new(@io, FRAME_MAX)
       tune_ok = start(credentials)
       @channel_max = tune_ok.channel_max
       @frame_max = tune_ok.frame_max
@@ -104,9 +109,9 @@ module AMQProxy
         Fiber.yield if (i &+= 1) % 4096 == 0
       end
     rescue ex : IO::Error | OpenSSL::SSL::Error
-      Log.info { "Connection error #{ex.inspect}" } unless socket.closed?
+      Log.info { "Connection error #{ex.inspect}" } unless @io.closed?
     ensure
-      socket.close rescue nil
+      @io.close rescue nil
       close_all_downstream_client_connections
     end
 
@@ -158,7 +163,7 @@ module AMQProxy
         @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
         @socket.flush unless expect_more_publish_frames?(frame)
       rescue ex : IO::Error | OpenSSL::SSL::Error
-        @socket.close rescue nil
+        @io.close rescue nil
         raise WriteError.new "Error writing to upstream", ex
       end
     end
@@ -177,13 +182,13 @@ module AMQProxy
         close.to_io(@socket, IO::ByteFormat::NetworkEndian)
         @socket.flush
       rescue ex : IO::Error | OpenSSL::SSL::Error
-        @socket.close
+        @io.close
         raise WriteError.new "Error writing Connection#Close to upstream", ex
       end
     end
 
     def closed?
-      @socket.closed?
+      @io.closed?
     end
 
     private def start(credentials) : AMQ::Protocol::Frame::Connection::TuneOk
@@ -203,7 +208,7 @@ module AMQProxy
         server_max = tune.channel_max.zero? ? UInt16::MAX : tune.channel_max
         max_upstream_channels = @max_upstream_channels.zero? ? UInt16::MAX : @max_upstream_channels
         channel_max = Math.min(server_max, max_upstream_channels)
-        frame_max = tune.frame_max.zero? ? 131072_u32 : Math.min(131072_u32, tune.frame_max)
+        frame_max = tune.frame_max.zero? ? FRAME_MAX : Math.min(FRAME_MAX, tune.frame_max)
         tune_ok = AMQ::Protocol::Frame::Connection::TuneOk.new(channel_max, frame_max, tune.heartbeat)
         @socket.write_bytes tune_ok, IO::ByteFormat::NetworkEndian
         @socket.flush
@@ -230,7 +235,7 @@ module AMQProxy
     rescue ex : AccessError
       raise ex
     rescue ex
-      @socket.close
+      @io.close
       raise Error.new ex.message, cause: ex
     end
 
