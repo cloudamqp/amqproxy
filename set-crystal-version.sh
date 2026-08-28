@@ -11,12 +11,12 @@ fi
 
 files=(
   Dockerfile
+  Dockerfile.deb
   Dockerfile.rpm
   tar.Dockerfile
   spec/Dockerfile
   .github/workflows/ci.yml
   .github/workflows/packages.yml
-  .github/workflows/rpm.yml
 )
 
 suffix='pre-'${version}
