@@ -13,10 +13,11 @@ module AMQProxy
     @frame_max : UInt32
     @channel_max : UInt16
     @heartbeat : UInt16
-    @last_heartbeat = Time.monotonic
+    @last_heartbeat = Time.instant
 
-    def initialize(@socket : TCPSocket)
-      set_socket_options(@socket)
+    def initialize(socket : TCPSocket)
+      set_socket_options(socket)
+      @socket = AMQ::Protocol::Stream.new(socket)
       tune_ok, @credentials = negotiate(@socket)
       @frame_max = tune_ok.frame_max
       @channel_max = tune_ok.channel_max
@@ -55,13 +56,18 @@ module AMQProxy
 
     # frames from enduser
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(client: socket.remote_address.to_s)
+      original_socket = socket.@io
+      if original_socket.responds_to?(:original_socket)
+        Log.context.set(client: original_socket.remote_address.to_s)
+      end
       Log.debug { "Connected" }
       i = 0u64
-      socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
+      if original_socket.responds_to?(:read_timeout=)
+        original_socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
+      end
       loop do
-        frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
-        @last_heartbeat = Time.monotonic
+        frame = socket.next_frame
+        @last_heartbeat = Time.instant
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
         when AMQ::Protocol::Frame::Connection::CloseOk then return
@@ -119,8 +125,8 @@ module AMQProxy
         Log.error(exception: ex) { "Upstream error" }
         close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
       rescue IO::TimeoutError
-        time_since_last_heartbeat = (Time.monotonic - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
-        if time_since_last_heartbeat <= 1 + @heartbeat                                    # add 1s grace because of rounding
+        time_since_last_heartbeat = (Time.instant - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
+        if time_since_last_heartbeat <= 1 + @heartbeat                                  # add 1s grace because of rounding
           Log.debug { "Sending heartbeat (last heartbeat #{time_since_last_heartbeat}s ago)" }
           write AMQ::Protocol::Frame::Heartbeat.new
         else
@@ -236,7 +242,7 @@ module AMQProxy
       socket.flush
 
       user = password = ""
-      start_ok = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::StartOk)
+      start_ok = socket.next_frame.as(AMQ::Protocol::Frame::Connection::StartOk)
       case start_ok.mechanism
       when "PLAIN"
         resp = start_ok.response
@@ -258,9 +264,9 @@ module AMQProxy
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      tune_ok = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::TuneOk)
+      tune_ok = socket.next_frame.as(AMQ::Protocol::Frame::Connection::TuneOk)
 
-      open = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::Open)
+      open = socket.next_frame.as(AMQ::Protocol::Frame::Connection::Open)
       vhost = open.vhost
 
       open_ok = AMQ::Protocol::Frame::Connection::OpenOk.new

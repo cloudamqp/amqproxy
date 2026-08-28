@@ -7,7 +7,7 @@ require "./channel_pool"
 module AMQProxy
   class Upstream
     Log = ::Log.for(self)
-    @socket : IO
+    @socket : AMQ::Protocol::Stream
     @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
     @channel_max : UInt16
@@ -25,7 +25,7 @@ module AMQProxy
       tcp_socket.tcp_keepalive_interval = 10
       tcp_socket.tcp_nodelay = true
       @remote_address = tcp_socket.remote_address.to_s
-      @socket =
+      socket =
         if tls_ctx = @tls_ctx
           tls_socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host)
           tls_socket.sync_close = true
@@ -33,6 +33,7 @@ module AMQProxy
         else
           tcp_socket
         end
+      @socket = AMQ::Protocol::Stream.new(socket)
       tune_ok = start(credentials)
       @channel_max = tune_ok.channel_max
       @frame_max = tune_ok.frame_max
@@ -69,7 +70,7 @@ module AMQProxy
       Log.context.set(upstream: @remote_address)
       i = 0u64
       loop do
-        case frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
+        case frame = socket.next_frame
         when AMQ::Protocol::Frame::Heartbeat then send frame
         when AMQ::Protocol::Frame::Connection::Close
           Log.error { "Upstream closed connection: #{frame.reply_text} #{frame.reply_code}" }
@@ -194,14 +195,14 @@ module AMQProxy
       @socket.flush
 
       # assert correct frame type
-      AMQ::Protocol::Frame.from_io(@socket).as(AMQ::Protocol::Frame::Connection::Start)
+      @socket.next_frame.as(AMQ::Protocol::Frame::Connection::Start)
 
       response = "\u0000#{credentials.user}\u0000#{credentials.password}"
       start_ok = AMQ::Protocol::Frame::Connection::StartOk.new(response: response, client_properties: ClientProperties, mechanism: "PLAIN", locale: "en_US")
       @socket.write_bytes start_ok, IO::ByteFormat::NetworkEndian
       @socket.flush
 
-      case tune = AMQ::Protocol::Frame.from_io(@socket)
+      case tune = @socket.next_frame
       when AMQ::Protocol::Frame::Connection::Tune
         server_max = tune.channel_max.zero? ? UInt16::MAX : tune.channel_max
         max_upstream_channels = @max_upstream_channels.zero? ? UInt16::MAX : @max_upstream_channels
@@ -221,7 +222,7 @@ module AMQProxy
       @socket.write_bytes open, IO::ByteFormat::NetworkEndian
       @socket.flush
 
-      case f = AMQ::Protocol::Frame.from_io(@socket, IO::ByteFormat::NetworkEndian)
+      case f = @socket.next_frame
       when AMQ::Protocol::Frame::Connection::OpenOk
       when AMQ::Protocol::Frame::Connection::Close
         send_close_ok

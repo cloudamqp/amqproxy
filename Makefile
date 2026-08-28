@@ -1,5 +1,9 @@
 SOURCES := $(shell find src/amqproxy -name '*.cr' 2> /dev/null)
+ifeq ($(shell uname -s),Darwin)
+LDFLAGS ?= -Wl,-dead_strip_dylibs
+else
 LDFLAGS ?= -Wl,-O1 -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -pie
+endif
 CRYSTAL_FLAGS ?= --release
 override CRYSTAL_FLAGS += --error-on-warnings --link-flags="$(LDFLAGS)" --stats
 
