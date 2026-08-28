@@ -1,2 +1,5 @@
 Excluded:
     - test/
+
+Lint/SignalTrap:
+  Enabled: false

@@ -21,9 +21,15 @@ man1/amqproxy.1: bin/amqproxy | man1
 .PHONY: deps
 deps: lib
 
+bin/ameba: lib/ameba | bin
+	crystal build lib/ameba/bin/ameba.cr -o $@
+
+lib/ameba: shard.yml shard.lock
+	shards install
+
 .PHONY: lint
-lint: lib
-	lib/ameba/bin/ameba src/
+lint: bin/ameba
+	$< src/ spec/
 
 .PHONY: test
 test: lib
