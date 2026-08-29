@@ -1,5 +1,9 @@
 SOURCES := $(shell find src/amqproxy -name '*.cr' 2> /dev/null)
+ifeq ($(shell uname -s),Darwin)
+LDFLAGS ?= -Wl,-dead_strip_dylibs
+else
 LDFLAGS ?= -Wl,-O1 -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -pie
+endif
 CRYSTAL_FLAGS ?= --release
 override CRYSTAL_FLAGS += --error-on-warnings --link-flags="$(LDFLAGS)" --stats
 
@@ -21,9 +25,15 @@ man1/amqproxy.1: bin/amqproxy | man1
 .PHONY: deps
 deps: lib
 
+bin/ameba: lib/ameba | bin
+	crystal build lib/ameba/bin/ameba.cr -o $@
+
+lib/ameba: shard.yml shard.lock
+	shards install
+
 .PHONY: lint
-lint: lib
-	lib/ameba/bin/ameba src/
+lint: bin/ameba
+	$< src/ spec/
 
 .PHONY: test
 test: lib

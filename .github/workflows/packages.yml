@@ -27,8 +27,6 @@ jobs:
           project: nm81cffkc0
           file: tar.Dockerfile
           platforms: linux/amd64,linux/arm64
-          build-args: |
-            image=84codes/crystal:1.15.1-${{ matrix.os }}
           outputs: builds
 
       - name: Upload github artifact
@@ -73,7 +71,7 @@ jobs:
           file: Dockerfile.deb
           platforms: linux/amd64,linux/arm64
           build-args: |
-            build_image=84codes/crystal:1.18.2-${{ matrix.os }}
+            build_image=84codes/crystal:1.21.0-${{ matrix.os }}
             version=${{ env.version }}
           outputs: builds
 
@@ -101,7 +99,7 @@ jobs:
   rpm:
     strategy:
       matrix:
-        os: ['fedora-41']
+        os: ['fedora-43']
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -139,7 +137,7 @@ jobs:
           file: Dockerfile.rpm
           platforms: linux/amd64,linux/arm64
           build-args: |
-            build_image=84codes/crystal:1.18.2-${{ matrix.os }}
+            build_image=84codes/crystal:1.21.0-${{ matrix.os }}
             version=${{ env.version }}
           outputs: RPMS
 

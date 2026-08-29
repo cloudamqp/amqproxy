@@ -16,6 +16,18 @@ rescue e : URI::Error
   exit 1
 end
 
+# Wait for another fiber to make the block true, `Fiber.yield` alone is not
+# enough as it doesn't guarantee that the event loop has seen the socket as
+# readable yet. Returns false if it never became true.
+def wait_until(timeout = 5.seconds, &) : Bool
+  deadline = Time.instant + timeout
+  until yield
+    return false if Time.instant > deadline
+    sleep 1.millisecond
+  end
+  true
+end
+
 def with_server(idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX, &)
   tls = UPSTREAM_URL.scheme == "amqps"
   host = UPSTREAM_URL.host || "127.0.0.1"

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Frames from clients and from the upstream server are now read through `AMQ::Protocol::Stream`, which validates them against the negotiated frame max of 131072 bytes.
+
 ## [v3.1.3] - 2026-03-04
 
 - Fix default AMQP port typo [#243](https://github.com/cloudamqp/amqproxy/pull/243)

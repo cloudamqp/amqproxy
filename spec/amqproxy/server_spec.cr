@@ -174,16 +174,14 @@ describe AMQProxy::Server do
       server.client_connections.should eq 1
       server.upstream_connections.should eq 1 # since connection stays open
       spawn do
-        begin
-          AMQP::Client.start(proxy_url) do |conn|
-            conn.channel
-            wait_for_channel.send(-1) # send 4 (this should not happen)
-            sleep 1.seconds
-          end
-        rescue ex
-          # ex.message.should be "Error reading socket: Connection reset by peer"
-          wait_for_channel.send(4) # send 4
+        AMQP::Client.start(proxy_url) do |conn|
+          conn.channel
+          wait_for_channel.send(-1) # send 4 (this should not happen)
+          sleep 1.seconds
         end
+      rescue
+        # ex.message.should be "Error reading socket: Connection reset by peer"
+        wait_for_channel.send(4) # send 4
       end
       wait_for_channel.receive.should eq 4    # wait 4
       server.client_connections.should eq 1   # since the new connection should not have worked
@@ -263,12 +261,10 @@ describe AMQProxy::Server do
         client = server.@clients.first?.should_not be_nil
         last_heartbeat = client.@last_heartbeat
         conn.channel
-        Fiber.yield
-        client.@last_heartbeat.should be > last_heartbeat
+        wait_until { client.@last_heartbeat > last_heartbeat }.should be_true, "Channel#Open didn't count as a heartbeat"
         last_heartbeat = client.@last_heartbeat
         conn.write AMQ::Protocol::Frame::Heartbeat.new
-        Fiber.yield
-        client.@last_heartbeat.should be > last_heartbeat
+        wait_until { client.@last_heartbeat > last_heartbeat }.should be_true, "Heartbeat didn't count as a heartbeat"
       end
     end
   end

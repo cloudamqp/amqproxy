@@ -13,11 +13,16 @@ module AMQProxy
     @frame_max : UInt32
     @channel_max : UInt16
     @heartbeat : UInt16
-    @last_heartbeat = Time.monotonic
+    @last_heartbeat = Time.instant
 
-    def initialize(@socket : TCPSocket)
-      set_socket_options(@socket)
-      tune_ok, @credentials = negotiate(@socket)
+    # The largest frame we offer the client in Connection#Tune, the client can
+    # only negotiate it down, so it's also the limit we enforce when reading
+    FRAME_MAX = 131_072_u32
+
+    def initialize(@tcp_socket : TCPSocket)
+      set_socket_options(@tcp_socket)
+      @socket = AMQ::Protocol::Stream.new(@tcp_socket, FRAME_MAX)
+      tune_ok, @credentials = negotiate(@tcp_socket, @socket)
       @frame_max = tune_ok.frame_max
       @channel_max = tune_ok.channel_max
       @heartbeat = tune_ok.heartbeat
@@ -55,13 +60,13 @@ module AMQProxy
 
     # frames from enduser
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(client: socket.remote_address.to_s)
+      Log.context.set(client: @tcp_socket.remote_address.to_s)
       Log.debug { "Connected" }
       i = 0u64
-      socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
+      @tcp_socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
       loop do
-        frame = AMQ::Protocol::Frame.from_io(socket, IO::ByteFormat::NetworkEndian)
-        @last_heartbeat = Time.monotonic
+        frame = socket.next_frame
+        @last_heartbeat = Time.instant
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
         when AMQ::Protocol::Frame::Connection::CloseOk then return
@@ -105,7 +110,7 @@ module AMQProxy
             else
               # Channel::Close is sent, waiting for CloseOk
             end
-          rescue ex : Upstream::WriteError
+          rescue Upstream::WriteError
             close_channel(src_channel, 500_u16, "UPSTREAM_ERROR")
           rescue KeyError
             close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
@@ -119,8 +124,8 @@ module AMQProxy
         Log.error(exception: ex) { "Upstream error" }
         close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
       rescue IO::TimeoutError
-        time_since_last_heartbeat = (Time.monotonic - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
-        if time_since_last_heartbeat <= 1 + @heartbeat                                    # add 1s grace because of rounding
+        time_since_last_heartbeat = (Time.instant - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
+        if time_since_last_heartbeat <= 1 + @heartbeat                                  # add 1s grace because of rounding
           Log.debug { "Sending heartbeat (last heartbeat #{time_since_last_heartbeat}s ago)" }
           write AMQ::Protocol::Frame::Heartbeat.new
         else
@@ -133,7 +138,7 @@ module AMQProxy
     else
       Log.debug { "Disconnected" }
     ensure
-      socket.close rescue nil
+      @tcp_socket.close rescue nil
       close_all_upstream_channels
     end
 
@@ -160,11 +165,11 @@ module AMQProxy
            AMQ::Protocol::Frame::Channel::CloseOk
         @channel_map.delete(frame.channel)
       when AMQ::Protocol::Frame::Connection::CloseOk
-        @socket.close rescue nil
+        @tcp_socket.close rescue nil
       end
-    rescue ex : IO::Error
+    rescue IO::Error
       # Client closed connection, suppress error
-      @socket.close rescue nil
+      @tcp_socket.close rescue nil
     end
 
     def close_connection(code, text, frame = nil)
@@ -208,10 +213,10 @@ module AMQProxy
     end
 
     def close_socket
-      @socket.close rescue nil
+      @tcp_socket.close rescue nil
     end
 
-    private def set_socket_options(socket = @socket)
+    private def set_socket_options(socket : TCPSocket)
       socket.sync = false
       socket.keepalive = true
       socket.tcp_nodelay = true
@@ -220,14 +225,15 @@ module AMQProxy
       socket.tcp_keepalive_interval = 10
     end
 
-    private def negotiate(socket = @socket)
+    private def negotiate(tcp_socket : TCPSocket, socket : AMQ::Protocol::Stream)
+      # the protocol header is not a frame, so it can't be read through the stream
       proto = uninitialized UInt8[8]
-      socket.read_fully(proto.to_slice)
+      tcp_socket.read_fully(proto.to_slice)
 
       if proto != AMQ::Protocol::PROTOCOL_START_0_9_1 && proto != AMQ::Protocol::PROTOCOL_START_0_9
         socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
         socket.flush
-        socket.close
+        tcp_socket.close
         raise IO::EOFError.new("Invalid protocol start")
       end
 
@@ -236,7 +242,7 @@ module AMQProxy
       socket.flush
 
       user = password = ""
-      start_ok = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::StartOk)
+      start_ok = socket.next_frame.as(AMQ::Protocol::Frame::Connection::StartOk)
       case start_ok.mechanism
       when "PLAIN"
         resp = start_ok.response
@@ -254,13 +260,13 @@ module AMQProxy
       else raise "Unsupported authentication mechanism: #{start_ok.mechanism}"
       end
 
-      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: 131072_u32, channel_max: UInt16::MAX, heartbeat: 0_u16)
+      tune = AMQ::Protocol::Frame::Connection::Tune.new(frame_max: FRAME_MAX, channel_max: UInt16::MAX, heartbeat: 0_u16)
       tune.to_io(socket, IO::ByteFormat::NetworkEndian)
       socket.flush
 
-      tune_ok = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::TuneOk)
+      tune_ok = socket.next_frame.as(AMQ::Protocol::Frame::Connection::TuneOk)
 
-      open = AMQ::Protocol::Frame.from_io(socket).as(AMQ::Protocol::Frame::Connection::Open)
+      open = socket.next_frame.as(AMQ::Protocol::Frame::Connection::Open)
       vhost = open.vhost
 
       open_ok = AMQ::Protocol::Frame::Connection::OpenOk.new

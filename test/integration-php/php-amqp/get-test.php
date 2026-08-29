@@ -23,6 +23,9 @@ $exchange->declareExchange();
 
 $queue = new AMQPQueue($channel);
 $queue->setName("test-q");
+// Durable, because a transient non-exclusive queue is a deprecated feature
+// that RabbitMQ denies by default since 4.2 (transient_nonexcl_queues)
+$queue->setFlags(AMQP_DURABLE);
 $queue->declareQueue();
 $queue->bind($exchange_name,$queue->getName());
 
