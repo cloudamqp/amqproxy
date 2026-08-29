@@ -16,6 +16,9 @@ module AMQProxy
     @remote_address : String
     @channel_max : UInt16
     @frame_max : UInt32
+    @heartbeat : UInt16
+    @last_write = Time.instant
+    @done = Channel(Nil).new
 
     # The largest frame we accept from the upstream server, we never negotiate
     # a higher value in Connection#TuneOk
@@ -42,6 +45,26 @@ module AMQProxy
       tune_ok = start(credentials)
       @channel_max = tune_ok.channel_max
       @frame_max = tune_ok.frame_max
+      @heartbeat = tune_ok.heartbeat
+      if @heartbeat > 0
+        spawn heartbeat_loop((@heartbeat / 2).seconds), name: "Upstream#heartbeat_loop"
+      end
+    end
+
+    # Send heartbeats when the connection is idle, the server expects them
+    # regardless of whether it sends any itself
+    private def heartbeat_loop(interval : Time::Span)
+      loop do
+        select
+        when @done.receive?
+          break
+        when timeout interval
+          next if Time.instant - @last_write < interval
+          send AMQ::Protocol::Frame::Heartbeat.new
+        end
+      end
+    rescue WriteError
+      # connection is gone, read_loop will clean up
     end
 
     def open_channel_for(downstream_channel : DownstreamChannel) : UpstreamChannel
@@ -108,9 +131,10 @@ module AMQProxy
         end
         Fiber.yield if (i &+= 1) % 4096 == 0
       end
-    rescue ex : IO::Error | OpenSSL::SSL::Error
+    rescue ex : IO::Error | OpenSSL::SSL::Error | AMQ::Protocol::Error
       Log.info { "Connection error #{ex.inspect}" } unless @io.closed?
     ensure
+      @done.close
       @io.close rescue nil
       close_all_downstream_client_connections
     end
@@ -162,6 +186,7 @@ module AMQProxy
       @lock.synchronize do
         @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
         @socket.flush unless expect_more_publish_frames?(frame)
+        @last_write = Time.instant
       rescue ex : IO::Error | OpenSSL::SSL::Error
         @io.close rescue nil
         raise WriteError.new "Error writing to upstream", ex
@@ -242,7 +267,7 @@ module AMQProxy
     private def send_close_ok
       @socket.write_bytes AMQ::Protocol::Frame::Connection::CloseOk.new, IO::ByteFormat::NetworkEndian
       @socket.flush
-      @socket.close
+      @io.close # Stream#close is a noop
     end
 
     ClientProperties = AMQ::Protocol::Table.new({

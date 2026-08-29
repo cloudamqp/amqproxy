@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Frames from clients and from the upstream server are now read through `AMQ::Protocol::Stream`, which validates them against the negotiated frame max of 131072 bytes.
+- Bugfix: Send heartbeats to upstream when the connection is idle, previously heartbeats were only sent as a reply to the server's own heartbeats, which RabbitMQ doesn't send while it's busy delivering to a consumer. [#210](https://github.com/cloudamqp/amqproxy/issues/210)
 
 ## [v3.1.3] - 2026-03-04
 
