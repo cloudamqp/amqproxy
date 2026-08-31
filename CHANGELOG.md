@@ -5,9 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v3.2.0] - 2026-08-31
+
+### Added
 
 - Frames from clients and from the upstream server are now read through `AMQ::Protocol::Stream`, which validates them against the negotiated frame max of 131072 bytes.
+
+### Fixed
+
 - Bugfix: Send heartbeats to upstream when the connection is idle, previously heartbeats were only sent as a reply to the server's own heartbeats, which RabbitMQ doesn't send while it's busy delivering to a consumer. [#210](https://github.com/cloudamqp/amqproxy/issues/210)
 
 ## [v3.1.3] - 2026-03-04
