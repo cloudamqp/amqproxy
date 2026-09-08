@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Bugfix: Send heartbeats to clients when the connection is idle, previously they were only sent after a period of silence from the client, so a client that kept sending frames itself never got any and timed out. Clients are also no longer disconnected until two heartbeat intervals have passed, as the specification requires. [#253](https://github.com/cloudamqp/amqproxy/issues/253)
+
 ## [v3.2.0] - 2026-08-31
 
 ### Added
