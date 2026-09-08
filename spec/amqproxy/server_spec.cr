@@ -259,12 +259,12 @@ describe AMQProxy::Server do
       Fiber.yield
       AMQP::Client.start("#{proxy_url}?heartbeat=1") do |conn|
         client = server.@clients.first?.should_not be_nil
-        last_heartbeat = client.@last_heartbeat
+        last_read = client.@last_read
         conn.channel
-        wait_until { client.@last_heartbeat > last_heartbeat }.should be_true, "Channel#Open didn't count as a heartbeat"
-        last_heartbeat = client.@last_heartbeat
+        wait_until { client.@last_read > last_read }.should be_true, "Channel#Open didn't count as a heartbeat"
+        last_read = client.@last_read
         conn.write AMQ::Protocol::Frame::Heartbeat.new
-        wait_until { client.@last_heartbeat > last_heartbeat }.should be_true, "Heartbeat didn't count as a heartbeat"
+        wait_until { client.@last_read > last_read }.should be_true, "Heartbeat didn't count as a heartbeat"
       end
     end
   end
