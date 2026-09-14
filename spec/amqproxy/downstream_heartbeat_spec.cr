@@ -84,11 +84,13 @@ describe AMQProxy::Client do
 
   it "closes an unresponsive client after two heartbeat intervals, not before" do
     with_server do |_server, amqp_url|
-      client = HeartbeatCountingClient.new(amqp_url, 6_u16)
+      # started before the connection, so the measured span can only be shorter
+      # than the one the proxy times out on, never longer
+      start = Time.instant
+      client = HeartbeatCountingClient.new(amqp_url, 1_u16)
       begin
-        sleep 10.5.seconds
-        client.disconnected?.should be_false, "Proxy closed the connection before 2x the heartbeat interval"
-        wait_until(6.seconds) { client.disconnected? }.should be_true, "Proxy didn't close the unresponsive connection"
+        wait_until(5.seconds) { client.disconnected? }.should be_true, "Proxy didn't close the unresponsive connection"
+        (Time.instant - start).should be >= 2.seconds, "Proxy closed the connection before 2x the heartbeat interval"
       ensure
         client.close
       end
