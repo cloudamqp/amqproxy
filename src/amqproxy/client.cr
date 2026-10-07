@@ -13,7 +13,9 @@ module AMQProxy
     @frame_max : UInt32
     @channel_max : UInt16
     @heartbeat : UInt16
-    @last_heartbeat = Time.instant
+    @last_read = Time.instant
+    @last_write = Time.instant
+    @done = Channel(Nil).new
 
     # The largest frame we offer the client in Connection#Tune, the client can
     # only negotiate it down, so it's also the limit we enforce when reading
@@ -63,10 +65,15 @@ module AMQProxy
       Log.context.set(client: @tcp_socket.remote_address.to_s)
       Log.debug { "Connected" }
       i = 0u64
-      @tcp_socket.read_timeout = (@heartbeat / 2).ceil.seconds if @heartbeat > 0
+      if @heartbeat > 0
+        # only used to detect a dead peer, heartbeats of our own are sent by the
+        # fiber below, on a cadence that doesn't depend on what the client sends
+        @tcp_socket.read_timeout = @heartbeat.seconds
+        spawn heartbeat_loop((@heartbeat / 2).seconds), name: "Client#heartbeat_loop"
+      end
       loop do
         frame = socket.next_frame
-        @last_heartbeat = Time.instant
+        @last_read = Time.instant
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
         when AMQ::Protocol::Frame::Connection::CloseOk then return
@@ -124,12 +131,10 @@ module AMQProxy
         Log.error(exception: ex) { "Upstream error" }
         close_connection(503_u16, "UPSTREAM_ERROR - #{ex.message}")
       rescue IO::TimeoutError
-        time_since_last_heartbeat = (Time.instant - @last_heartbeat).total_seconds.to_i # ignore subsecond latency
-        if time_since_last_heartbeat <= 1 + @heartbeat                                  # add 1s grace because of rounding
-          Log.debug { "Sending heartbeat (last heartbeat #{time_since_last_heartbeat}s ago)" }
-          write AMQ::Protocol::Frame::Heartbeat.new
-        else
-          Log.warn { "No heartbeat response in #{time_since_last_heartbeat}s (max #{1 + @heartbeat}s), closing connection" }
+        max_idle = 2 * @heartbeat.to_i                                        # the peer is dead only after two missed intervals
+        time_since_last_read = (Time.instant - @last_read).total_seconds.to_i # ignore subsecond latency
+        if time_since_last_read >= max_idle
+          Log.warn { "No frames from client in #{time_since_last_read}s (max #{max_idle}s), closing connection" }
           return
         end
       end
@@ -138,8 +143,25 @@ module AMQProxy
     else
       Log.debug { "Disconnected" }
     ensure
+      @done.close
       @tcp_socket.close rescue nil
       close_all_upstream_channels
+    end
+
+    # Send heartbeats when we haven't written anything to the client for half
+    # the heartbeat interval, the client expects them no matter how much it
+    # sends us itself
+    private def heartbeat_loop(interval : Time::Span)
+      loop do
+        select
+        when @done.receive?
+          break
+        when timeout interval
+          next if Time.instant - @last_write < interval
+          Log.debug { "Sending heartbeat" }
+          write AMQ::Protocol::Frame::Heartbeat.new
+        end
+      end
     end
 
     # Send frame to client, channel id should already be remapped by the caller
@@ -159,6 +181,7 @@ module AMQProxy
           @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
         end
         @socket.flush unless expect_more_frames?(frame)
+        @last_write = Time.instant
       end
       case frame
       when AMQ::Protocol::Frame::Channel::Close,
