@@ -64,18 +64,6 @@ class HeartbeatCountingServer
   end
 end
 
-def with_proxy_to(upstream_port, &)
-  server = AMQProxy::Server.new("127.0.0.1", upstream_port, false)
-  tcp_server = TCPServer.new("127.0.0.1", 0)
-  spawn { server.listen(tcp_server) }
-  Fiber.yield
-  yield "amqp://#{tcp_server.local_address}"
-ensure
-  if s = server
-    s.stop_accepting_clients
-  end
-end
-
 describe AMQProxy::Upstream do
   it "sends heartbeats to upstream when the connection is idle" do
     upstream = HeartbeatCountingServer.new(2_u16)
