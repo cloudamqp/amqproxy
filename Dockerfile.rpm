@@ -2,7 +2,7 @@ ARG build_image=84codes/crystal:1.21.0-fedora-43
 
 FROM $build_image AS builder
 RUN dnf install -y --nodocs --setopt=install_weak_deps=False --repo=fedora,updates \
-    rpmdevtools rpmlint systemd-rpm-macros npm make help2man
+    rpmdevtools rpmlint systemd-rpm-macros npm make help2man openssl-devel
 RUN rpmdev-setuptree
 COPY amqproxy.spec /root/rpmbuild/SPECS/
 ARG version
@@ -19,7 +19,7 @@ ARG MAKEFLAGS
 RUN rpmbuild -ba /root/rpmbuild/SPECS/amqproxy.spec
 RUN rpmlint /root/rpmbuild/RPMS/* || true
 
-FROM fedora:39 AS test
+FROM fedora:43 AS test
 COPY --from=builder /root/rpmbuild/RPMS /tmp/RPMS
 RUN find /tmp/RPMS -type f -exec dnf install -y {} \;
 RUN amqproxy --version
