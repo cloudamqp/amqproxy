@@ -5,17 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v3.2.2] - 2026-10-16
 
 ### Fixed
 
-- Bugfix: Close client connections that don't answer Connection#Close within 5 seconds, and discard their frames until then instead of forwarding them upstream, as the specification requires. Previously a publisher that never reads from its socket kept its connection forever after the upstream connection closed, and every message it published was silently dropped. [#255](https://github.com/cloudamqp/amqproxy/issues/255)
+- Bugfix: Close client connections that don't answer Connection#Close within 5 seconds, and discard their frames until then instead of forwarding them upstream, as the specification requires. Previously a publisher that never reads from its socket kept its connection forever after the upstream connection closed, and every message it published was silently dropped. [#256](https://github.com/cloudamqp/amqproxy/pull/256)
+
+### Removed
+
+- Packages are no longer built for Debian 11, as it has reached end of life. [#257](https://github.com/cloudamqp/amqproxy/pull/257)
 
 ## [v3.2.1] - 2026-10-07
 
 ### Fixed
 
-- Bugfix: Send heartbeats to clients when the connection is idle, previously they were only sent after a period of silence from the client, so a client that kept sending frames itself never got any and timed out. Clients are also no longer disconnected until two heartbeat intervals have passed, as the specification requires. [#253](https://github.com/cloudamqp/amqproxy/issues/254)
+- Bugfix: Send heartbeats to clients when the connection is idle, previously they were only sent after a period of silence from the client, so a client that kept sending frames itself never got any and timed out. Clients are also no longer disconnected until two heartbeat intervals have passed, as the specification requires. [#254](https://github.com/cloudamqp/amqproxy/pull/254)
 
 ## [v3.2.0] - 2026-08-31
 
