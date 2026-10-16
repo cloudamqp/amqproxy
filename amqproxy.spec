@@ -4,7 +4,7 @@ Version: 1.0.0
 Release: 1%{?dist}
 
 License: Apache 2.0
-BuildRequires: systemd-rpm-macros crystal help2man
+BuildRequires: systemd-rpm-macros crystal help2man openssl-devel
 URL: https://github.com/cloudamqp/amqproxy
 Source: amqproxy.tar.gz
 
