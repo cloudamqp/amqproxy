@@ -16,12 +16,19 @@ module AMQProxy
     @last_read = Time.instant
     @last_write = Time.instant
     @done = Channel(Nil).new
+    @closing = false
+    @remote_address : String
 
     # The largest frame we offer the client in Connection#Tune, the client can
     # only negotiate it down, so it's also the limit we enforce when reading
     FRAME_MAX = 131_072_u32
 
-    def initialize(@tcp_socket : TCPSocket)
+    # How long a client gets to answer our Connection#Close before we close the
+    # socket, a client that never reads would otherwise stay connected forever
+    CLOSE_TIMEOUT = 5.seconds
+
+    def initialize(@tcp_socket : TCPSocket, @close_timeout : Time::Span = CLOSE_TIMEOUT)
+      @remote_address = @tcp_socket.remote_address.to_s
       set_socket_options(@tcp_socket)
       @socket = AMQ::Protocol::Stream.new(@tcp_socket, FRAME_MAX)
       tune_ok, @credentials = negotiate(@tcp_socket, @socket)
@@ -62,7 +69,7 @@ module AMQProxy
 
     # frames from enduser
     def read_loop(channel_pool, socket = @socket) # ameba:disable Metrics/CyclomaticComplexity
-      Log.context.set(client: @tcp_socket.remote_address.to_s)
+      Log.context.set(client: @remote_address)
       Log.debug { "Connected" }
       i = 0u64
       if @heartbeat > 0
@@ -72,8 +79,13 @@ module AMQProxy
         spawn heartbeat_loop((@heartbeat / 2).seconds), name: "Client#heartbeat_loop"
       end
       loop do
+        # at the top, so frames discarded below also let other fibers run
+        Fiber.yield if (i &+= 1) % 4096 == 0
         frame = socket.next_frame
         @last_read = Time.instant
+        if @closing && !frame.is_a?(AMQ::Protocol::Frame::Connection::Close | AMQ::Protocol::Frame::Connection::CloseOk)
+          next # the spec requires discarding all but Close/CloseOk after sending Close
+        end
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
         when AMQ::Protocol::Frame::Connection::CloseOk then return
@@ -123,7 +135,6 @@ module AMQProxy
             close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           end
         end
-        Fiber.yield if (i &+= 1) % 4096 == 0
       rescue ex : Upstream::AccessError
         Log.error { "Access refused, reason: #{ex.message}" }
         close_connection(403_u16, ex.message || "ACCESS_REFUSED")
@@ -167,6 +178,10 @@ module AMQProxy
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
       @lock.synchronize do
+        if frame.is_a?(AMQ::Protocol::Frame::Connection::Close)
+          return if @closing # already sent, waiting for CloseOk
+          @closing = true
+        end
         case frame
         when AMQ::Protocol::Frame::BytesBody
           # Upstream might send large frames, split them to support lower client frame_max
@@ -187,12 +202,26 @@ module AMQProxy
       when AMQ::Protocol::Frame::Channel::Close,
            AMQ::Protocol::Frame::Channel::CloseOk
         @channel_map.delete(frame.channel)
+      when AMQ::Protocol::Frame::Connection::Close
+        spawn wait_for_close_ok, name: "Client#wait_for_close_ok"
       when AMQ::Protocol::Frame::Connection::CloseOk
         @tcp_socket.close rescue nil
       end
     rescue IO::Error
       # Client closed connection, suppress error
       @tcp_socket.close rescue nil
+    end
+
+    # Closing the socket is the only way a client that never reads notices
+    # that the connection is closed
+    private def wait_for_close_ok
+      select
+      when @done.receive?
+      when timeout @close_timeout
+        Log.context.set(client: @remote_address)
+        Log.warn { "No Connection#CloseOk from client in #{@close_timeout.total_seconds}s, closing connection" }
+        @tcp_socket.close rescue nil
+      end
     end
 
     def close_connection(code, text, frame = nil)
@@ -232,7 +261,6 @@ module AMQProxy
       write AMQ::Protocol::Frame::Connection::Close.new(0_u16,
         "AMQProxy shutdown",
         0_u16, 0_u16)
-      # @socket.read_timeout = 1.seconds
     end
 
     def close_socket

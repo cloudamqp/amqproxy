@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Bugfix: Close client connections that don't answer Connection#Close within 5 seconds, and discard their frames until then instead of forwarding them upstream, as the specification requires. Previously a publisher that never reads from its socket kept its connection forever after the upstream connection closed, and every message it published was silently dropped. [#255](https://github.com/cloudamqp/amqproxy/issues/255)
+
 ## [v3.2.1] - 2026-10-07
 
 ### Fixed

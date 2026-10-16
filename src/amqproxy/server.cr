@@ -21,7 +21,8 @@ module AMQProxy
       new(host, port, tls, idle_connection_timeout)
     end
 
-    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX)
+    def initialize(upstream_host, upstream_port, upstream_tls, idle_connection_timeout = 5, max_upstream_channels = UInt16::MAX,
+                   @client_close_timeout : Time::Span = Client::CLOSE_TIMEOUT)
       tls_ctx = OpenSSL::SSL::Context::Client.new if upstream_tls
       @channel_pools = Hash(Credentials, ChannelPool).new do |hash, credentials|
         hash[credentials] = ChannelPool.new(upstream_host, upstream_port, tls_ctx, credentials, idle_connection_timeout, max_upstream_channels)
@@ -74,7 +75,7 @@ module AMQProxy
     end
 
     private def handle_connection(socket, remote_address)
-      c = Client.new(socket)
+      c = Client.new(socket, @client_close_timeout)
       active_client(c) do
         channel_pool = @channel_pools[c.credentials]
         c.read_loop(channel_pool)

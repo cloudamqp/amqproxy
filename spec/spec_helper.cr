@@ -44,6 +44,18 @@ ensure
   end
 end
 
+def with_proxy_to(upstream_port, client_close_timeout = AMQProxy::Client::CLOSE_TIMEOUT, &)
+  server = AMQProxy::Server.new("127.0.0.1", upstream_port, false, client_close_timeout: client_close_timeout)
+  tcp_server = TCPServer.new("127.0.0.1", 0)
+  spawn { server.listen(tcp_server) }
+  Fiber.yield
+  yield "amqp://#{tcp_server.local_address}"
+ensure
+  if s = server
+    s.stop_accepting_clients
+  end
+end
+
 def with_http_server(idle_connection_timeout = 5, &)
   with_server do |server, amqp_url|
     http_server = AMQProxy::HTTPServer.new(server, "127.0.0.1", 15673)
