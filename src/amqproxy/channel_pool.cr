@@ -14,25 +14,22 @@ module AMQProxy
       @error : Upstream::Error?
       @ready = Channel(Nil).new # closed when connected or failed
 
-      # *channel_max* applies until the server has negotiated its own
-      def initialize(@channel_max : UInt16)
-      end
-
-      # Counts a pending channel, unless the upstream is full or unusable
-      def reserve? : Bool
+      # Counts a pending channel, unless the upstream is full or unusable.
+      # *channel_max* applies until the upstream has negotiated its own.
+      def reserve?(channel_max : UInt16) : Bool
         @lock.synchronize do
-          return false if full?
+          return false if full?(channel_max)
           @pending += 1
           true
         end
       end
 
-      private def full? : Bool
+      private def full?(channel_max : UInt16) : Bool
         return true if @error
         if upstream = @upstream
           upstream.closed? || upstream.channels + @pending >= upstream.channel_max
         else
-          @pending >= @channel_max
+          @pending >= channel_max
         end
       end
 
@@ -106,16 +103,22 @@ module AMQProxy
 
     @lock = Mutex.new
     @upstreams = Deque(PooledUpstream).new
+    # From the latest connection, likely what the next one negotiates too
+    @negotiated_channel_max : UInt16?
 
     def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @credentials : Credentials, @idle_connection_timeout : Int32, @max_upstream_channels : UInt16,
                    @open_channel_timeout : Time::Span = OPEN_CHANNEL_TIMEOUT)
+      @max_upstream_channels = UInt16::MAX if @max_upstream_channels.zero?
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
     def get(downstream_channel : DownstreamChannel) : UpstreamChannel
       deadline = Time.instant + @open_channel_timeout
       loop do
-        pooled = @lock.synchronize { @upstreams.find(&.reserve?) || add_upstream.tap(&.reserve?) }
+        pooled = @lock.synchronize do
+          channel_max = @negotiated_channel_max || @max_upstream_channels
+          @upstreams.find(&.reserve?(channel_max)) || add_upstream.tap(&.reserve?(channel_max))
+        end
         return pooled.open_channel(downstream_channel, deadline)
       rescue Upstream::ChannelMaxReached
         # the server negotiated a lower channel_max than we reserved for
@@ -124,8 +127,7 @@ module AMQProxy
 
     # Must be called with the lock held
     private def add_upstream : PooledUpstream
-      channel_max = @max_upstream_channels.zero? ? UInt16::MAX : @max_upstream_channels
-      pooled = PooledUpstream.new(channel_max)
+      pooled = PooledUpstream.new
       @upstreams.unshift pooled
       spawn connect(pooled), name: "ChannelPool#connect"
       pooled
@@ -139,10 +141,21 @@ module AMQProxy
         return
       end
       Log.info { "Adding upstream connection" }
+      negotiated(upstream.channel_max)
       pooled.connected(upstream)
       upstream.read_loop
     ensure
       @lock.synchronize { @upstreams.delete pooled }
+    end
+
+    private def negotiated(channel_max : UInt16) : Nil
+      @lock.synchronize do
+        previous = @negotiated_channel_max
+        if previous && previous != channel_max
+          Log.info { "Upstream channel_max changed from #{previous} to #{channel_max}" }
+        end
+        @negotiated_channel_max = channel_max
+      end
     end
 
     def connections

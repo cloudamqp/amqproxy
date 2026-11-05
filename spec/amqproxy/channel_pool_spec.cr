@@ -211,4 +211,86 @@ describe AMQProxy::ChannelPool do
       upstream.close
     end
   end
+
+  it "limits connecting upstreams to the channel_max of the latest connection" do
+    upstream = SlowUpstream.new
+    upstream.channel_max = 1_u16
+    begin
+      with_proxy_to(upstream.port, open_channel_timeout: 3.seconds) do |proxy_url|
+        AMQP::Client.start(proxy_url) do |conn|
+          conn.channel # the only connection is now full
+          upstream.start_delay = 0.5.seconds
+          started = Time.instant
+          opened = Channel(Exception?).new(3)
+          release = Channel(Nil).new
+          3.times do
+            spawn do
+              AMQP::Client.start(proxy_url) do |client|
+                client.channel
+                opened.send nil
+                release.receive? # keep it open, a freed slot could be reused
+              end
+            rescue ex
+              opened.send ex
+            end
+          end
+          3.times { opened.receive.should be_nil }
+          # one at a time they would take 3 start delays
+          (Time.instant - started).should be < 1.second
+          release.close
+          upstream.connections.should eq 4
+        end
+      end
+    ensure
+      upstream.close
+    end
+  end
+
+  it "lets a connected upstream use its own channel_max" do
+    upstream = SlowUpstream.new
+    upstream.channel_max = 2_u16
+    begin
+      with_proxy_to(upstream.port) do |proxy_url|
+        AMQP::Client.start(proxy_url) do |conn|
+          first = conn.channel
+          conn.channel
+          upstream.channel_max = 1_u16
+          conn.channel
+          upstream.connections.should eq 2
+
+          first.close
+          conn.channel
+          upstream.connections.should eq 2
+        end
+      end
+    ensure
+      upstream.close
+    end
+  end
+
+  it "keeps the channel_max of each pool apart" do
+    upstream = SlowUpstream.new
+    upstream.channel_max = 1_u16
+    begin
+      with_proxy_to(upstream.port, open_channel_timeout: 3.seconds) do |proxy_url|
+        AMQP::Client.start(proxy_url, &.channel)
+        upstream.channel_max = UInt16::MAX
+        upstream.start_delay = 0.3.seconds
+        other_url = proxy_url.sub("amqp://", "amqp://other:secret@")
+        done = Channel(Exception?).new(3)
+        3.times do
+          spawn do
+            AMQP::Client.start(other_url, &.channel)
+            done.send nil
+          rescue ex
+            done.send ex
+          end
+        end
+        3.times { done.receive.should be_nil }
+        upstream.connections.should eq 2
+      end
+    ensure
+      upstream.close
+    end
+  end
 end
