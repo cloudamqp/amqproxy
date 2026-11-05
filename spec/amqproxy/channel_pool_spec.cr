@@ -12,6 +12,7 @@ class SlowUpstream
   # Delay before Channel#OpenOk, nil to never send it
   property open_ok_delay : Time::Span? = Time::Span.zero
   property? refuse_channels = false
+  property? close_after_open_ok = false
   @sockets = Array(TCPSocket).new
 
   FRAME_MAX = 131_072_u32
@@ -47,7 +48,13 @@ class SlowUpstream
           send socket, AMQ::Protocol::Frame::Channel::Close.new(frame.channel, 406_u16, "PRECONDITION_FAILED - refused", 20_u16, 10_u16)
         elsif delay = @open_ok_delay
           sleep delay
-          send socket, AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+          open_ok = AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+          if @close_after_open_ok # in one write, so the proxy reads both at once
+            socket.write_bytes open_ok, IO::ByteFormat::NetworkEndian
+            send socket, AMQ::Protocol::Frame::Channel::Close.new(frame.channel, 406_u16, "PRECONDITION_FAILED - closed", 0_u16, 0_u16)
+          else
+            send socket, open_ok
+          end
         end
       when AMQ::Protocol::Frame::Channel::Close
         @channel_closes += 1
@@ -77,6 +84,41 @@ class SlowUpstream
   private def send(socket, frame)
     socket.write_bytes frame, IO::ByteFormat::NetworkEndian
     socket.flush
+  end
+end
+
+# Raw AMQP client, to see exactly which frames the proxy sends, in order
+class RawClient
+  FRAME_MAX = 131_072_u32
+
+  def initialize(url : String)
+    uri = URI.parse(url)
+    @socket = TCPSocket.new(uri.hostname || "127.0.0.1", uri.port || 5672)
+    @socket.sync = false
+    @socket.read_timeout = 5.seconds # fail instead of hang
+    @stream = AMQ::Protocol::Stream.new(@socket, FRAME_MAX)
+    @socket.write AMQ::Protocol::PROTOCOL_START_0_9_1.to_slice
+    @socket.flush
+    next_frame.as(AMQ::Protocol::Frame::Connection::Start)
+    send AMQ::Protocol::Frame::Connection::StartOk.new(client_properties: AMQ::Protocol::Table.new,
+      mechanism: "PLAIN", response: "\u0000guest\u0000guest", locale: "en_US")
+    next_frame.as(AMQ::Protocol::Frame::Connection::Tune)
+    send AMQ::Protocol::Frame::Connection::TuneOk.new(UInt16::MAX, FRAME_MAX, 0_u16)
+    send AMQ::Protocol::Frame::Connection::Open.new(vhost: "/")
+    next_frame.as(AMQ::Protocol::Frame::Connection::OpenOk)
+  end
+
+  def next_frame : AMQ::Protocol::Frame
+    @stream.next_frame
+  end
+
+  def send(frame)
+    @socket.write_bytes frame, IO::ByteFormat::NetworkEndian
+    @socket.flush
+  end
+
+  def close
+    @socket.close rescue nil
   end
 end
 
@@ -161,6 +203,25 @@ describe AMQProxy::ChannelPool do
           upstream.open_ok_delay = Time::Span.zero
           conn.channel
           upstream.connections.should eq 1
+        end
+      end
+    ensure
+      upstream.close
+    end
+  end
+
+  it "sends Channel#OpenOk before other frames on the channel" do
+    upstream = SlowUpstream.new
+    upstream.close_after_open_ok = true
+    begin
+      with_proxy_to(upstream.port) do |proxy_url|
+        client = RawClient.new(proxy_url)
+        begin
+          client.send AMQ::Protocol::Frame::Channel::Open.new(1_u16)
+          client.next_frame.should be_a(AMQ::Protocol::Frame::Channel::OpenOk)
+          client.next_frame.should be_a(AMQ::Protocol::Frame::Channel::Close)
+        ensure
+          client.close
         end
       end
     ensure

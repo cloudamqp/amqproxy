@@ -34,7 +34,7 @@ module AMQProxy
       end
 
       # Opens a channel reserved with `#reserve?`
-      def open_channel(downstream_channel : DownstreamChannel, deadline : Time::Instant) : UpstreamChannel
+      def open_channel(downstream_channel : DownstreamChannel, deadline : Time::Instant) : Nil
         upstream = begin
           wait_for_connection(deadline)
         rescue ex
@@ -46,7 +46,6 @@ module AMQProxy
           upstream.create_channel(downstream_channel)
         end
         upstream.open_channel(upstream_channel, deadline - Time.instant)
-        upstream_channel
       end
 
       private def wait_for_connection(deadline : Time::Instant) : Upstream
@@ -98,7 +97,7 @@ module AMQProxy
 
     Log = ::Log.for(self)
 
-    # How long `#get` waits for a channel, including connecting to upstream
+    # How long `#open_channel` waits for a channel, including connecting to upstream
     OPEN_CHANNEL_TIMEOUT = 10.seconds
 
     @lock = Mutex.new
@@ -112,7 +111,8 @@ module AMQProxy
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
-    def get(downstream_channel : DownstreamChannel) : UpstreamChannel
+    # Returns when the upstream has told *downstream_channel* that it's open
+    def open_channel(downstream_channel : DownstreamChannel) : Nil
       deadline = Time.instant + @open_channel_timeout
       loop do
         pooled = @lock.synchronize do

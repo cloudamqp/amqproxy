@@ -96,8 +96,7 @@ module AMQProxy
         when AMQ::Protocol::Frame::Channel::Open
           raise "Channel already opened" if @channel_map.has_key? frame.channel
           begin
-            @channel_map[frame.channel] = channel_pool.get(DownstreamChannel.new(self, frame.channel))
-            write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+            channel_pool.open_channel(DownstreamChannel.new(self, frame.channel))
           rescue ex : Upstream::ChannelOpenError
             Log.warn { "Upstream didn't open channel: #{ex.reply_code} #{ex.reply_text}" }
             close_channel(frame.channel, ex.reply_code, ex.reply_text)
@@ -226,6 +225,12 @@ module AMQProxy
         Log.warn { "No Connection#CloseOk from client in #{@close_timeout.total_seconds}s, closing connection" }
         @tcp_socket.close rescue nil
       end
+    end
+
+    # Called by the upstream when the server has opened the channel
+    def channel_opened(channel : UInt16, upstream_channel : UpstreamChannel) : Nil
+      @channel_map[channel] = upstream_channel
+      write AMQ::Protocol::Frame::Channel::OpenOk.new(channel)
     end
 
     def close_connection(code, text, frame = nil)

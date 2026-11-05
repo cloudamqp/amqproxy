@@ -19,6 +19,10 @@ module AMQProxy
       @client.write(frame)
     end
 
+    def opened(upstream_channel : UpstreamChannel)
+      @client.channel_opened(@channel, upstream_channel)
+    end
+
     def close(code, reason)
       @client.close_channel(@channel, code, reason)
     end

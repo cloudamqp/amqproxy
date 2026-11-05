@@ -96,26 +96,29 @@ module AMQProxy
       send AMQ::Protocol::Frame::Channel::Open.new(id)
       select
       when refused = opened.receive
-        raise ChannelOpenError.new(refused.reply_code, refused.reply_text) if refused
       when @done.receive?
         raise Error.new "Upstream connection closed while opening channel"
       when timeout(timeout)
-        abandon_channel(id)
-        raise ChannelOpenError.new(500_u16, "UPSTREAM_ERROR - Timeout waiting for upstream to open channel")
+        if abandon_channel(id)
+          raise ChannelOpenError.new(500_u16, "UPSTREAM_ERROR - Timeout waiting for upstream to open channel")
+        end
+        refused = opened.receive # answered just as the timeout fired
       end
+      raise ChannelOpenError.new(refused.reply_code, refused.reply_text) if refused
     end
 
     # The server may still open the channel, so close it, but stop
-    # forwarding its frames as the client never got Channel#OpenOk
-    private def abandon_channel(id : UInt16) : Nil
+    # forwarding its frames as the client never got Channel#OpenOk.
+    # False if the server has already answered.
+    private def abandon_channel(id : UInt16) : Bool
       @channels_lock.synchronize do
-        @opening.delete(id)
-        return unless @channels.has_key?(id) # already closed by the server
+        return false unless @opening.delete(id)
         @channels[id] = nil
       end
       close_channel(id, 200_u16, "Timeout waiting for Channel#OpenOk")
+      true
     rescue WriteError
-      # connection is gone, read_loop will clean up
+      true # connection is gone, read_loop will clean up
     end
 
     def close_channel(id, code, reason)
@@ -146,7 +149,16 @@ module AMQProxy
              AMQ::Protocol::Frame::Connection::Unblocked
           send_to_all_clients(frame)
         when AMQ::Protocol::Frame::Channel::OpenOk
-          @channels_lock.synchronize { @opening.delete(frame.channel) }.try &.send(nil)
+          opening, downstream_channel = @channels_lock.synchronize do
+            downstream = @channels[frame.channel]?
+            # without a client to tell, the waiter times out and closes it
+            {downstream && @opening.delete(frame.channel), downstream}
+          end
+          if opening && downstream_channel
+            opening.send(nil)
+            # here, so that the client gets it before any other frame on the channel
+            downstream_channel.opened(UpstreamChannel.new(self, frame.channel))
+          end
         when AMQ::Protocol::Frame::Channel::Close
           send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
           opening, downstream_channel = @channels_lock.synchronize do
