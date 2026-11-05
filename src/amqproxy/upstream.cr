@@ -9,12 +9,15 @@ module AMQProxy
     Log = ::Log.for(self)
     @socket : AMQ::Protocol::Stream
     @io : TCPSocket | OpenSSL::SSL::Socket::Client
-    @channels = Hash(UInt16, DownstreamChannel).new
+    # nil for a channel that timed out while opening, kept until the server
+    # confirms that it's closed so that the id isn't reused
+    @channels = Hash(UInt16, DownstreamChannel?).new
+    # Gets nil on Channel#OpenOk, or the Channel#Close the server refused with
+    @opening = Hash(UInt16, Channel(AMQ::Protocol::Frame::Channel::Close?)).new
     @channels_lock = Mutex.new
-    @channel_max : UInt16
     @lock = Mutex.new
     @remote_address : String
-    @channel_max : UInt16
+    getter channel_max : UInt16
     @frame_max : UInt32
     @heartbeat : UInt16
     @last_write = Time.instant
@@ -24,8 +27,9 @@ module AMQProxy
     # a higher value in Connection#TuneOk
     FRAME_MAX = 131_072_u32
 
-    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials, @max_upstream_channels : UInt16 = UInt16::MAX)
-      tcp_socket = TCPSocket.new(@host, @port)
+    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials, @max_upstream_channels : UInt16 = UInt16::MAX,
+                   connect_timeout : Time::Span? = nil)
+      tcp_socket = TCPSocket.new(@host, @port, connect_timeout: connect_timeout)
       tcp_socket.sync = false
       tcp_socket.keepalive = true
       tcp_socket.tcp_keepalive_idle = 60
@@ -33,6 +37,7 @@ module AMQProxy
       tcp_socket.tcp_keepalive_interval = 10
       tcp_socket.tcp_nodelay = true
       @remote_address = tcp_socket.remote_address.to_s
+      tcp_socket.read_timeout = connect_timeout # also limits the TLS and AMQP handshakes
       @io =
         if tls_ctx = @tls_ctx
           tls_socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host)
@@ -43,6 +48,7 @@ module AMQProxy
         end
       @socket = AMQ::Protocol::Stream.new(@io, FRAME_MAX)
       tune_ok = start(credentials)
+      tcp_socket.read_timeout = nil
       @channel_max = tune_ok.channel_max
       @frame_max = tune_ok.frame_max
       @heartbeat = tune_ok.heartbeat
@@ -67,14 +73,11 @@ module AMQProxy
       # connection is gone, read_loop will clean up
     end
 
-    def open_channel_for(downstream_channel : DownstreamChannel) : UpstreamChannel
-      upstream_channel = create_upstream_channel(downstream_channel)
-      send AMQ::Protocol::Frame::Channel::Open.new(upstream_channel.channel)
-      upstream_channel
-    end
-
-    private def create_upstream_channel(downstream_channel : DownstreamChannel)
+    # Takes a free channel id, which counts towards `#channels` from now on,
+    # the channel must then be opened with `#open_channel`
+    def create_channel(downstream_channel : DownstreamChannel) : UpstreamChannel
       @channels_lock.synchronize do
+        raise ChannelMaxReached.new if @channels.size >= @channel_max
         1_u16.upto(@channel_max) do |i|
           unless @channels.has_key?(i)
             @channels[i] = downstream_channel
@@ -83,6 +86,36 @@ module AMQProxy
         end
         raise ChannelMaxReached.new
       end
+    end
+
+    # Sends Channel#Open and waits for the server to answer
+    def open_channel(upstream_channel : UpstreamChannel, timeout : Time::Span) : Nil
+      id = upstream_channel.channel
+      opened = Channel(AMQ::Protocol::Frame::Channel::Close?).new(1)
+      @channels_lock.synchronize { @opening[id] = opened }
+      send AMQ::Protocol::Frame::Channel::Open.new(id)
+      select
+      when refused = opened.receive
+        raise ChannelOpenError.new(refused.reply_code, refused.reply_text) if refused
+      when @done.receive?
+        raise Error.new "Upstream connection closed while opening channel"
+      when timeout(timeout)
+        abandon_channel(id)
+        raise ChannelOpenError.new(500_u16, "UPSTREAM_ERROR - Timeout waiting for upstream to open channel")
+      end
+    end
+
+    # The server may still open the channel, so close it, but stop
+    # forwarding its frames as the client never got Channel#OpenOk
+    private def abandon_channel(id : UInt16) : Nil
+      @channels_lock.synchronize do
+        @opening.delete(id)
+        return unless @channels.has_key?(id) # already closed by the server
+        @channels[id] = nil
+      end
+      close_channel(id, 200_u16, "Timeout waiting for Channel#OpenOk")
+    rescue WriteError
+      # connection is gone, read_loop will clean up
     end
 
     def close_channel(id, code, reason)
@@ -112,10 +145,16 @@ module AMQProxy
         when AMQ::Protocol::Frame::Connection::Blocked,
              AMQ::Protocol::Frame::Connection::Unblocked
           send_to_all_clients(frame)
-        when AMQ::Protocol::Frame::Channel::OpenOk # assume it always succeeds
+        when AMQ::Protocol::Frame::Channel::OpenOk
+          @channels_lock.synchronize { @opening.delete(frame.channel) }.try &.send(nil)
         when AMQ::Protocol::Frame::Channel::Close
           send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-          if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
+          opening, downstream_channel = @channels_lock.synchronize do
+            {@opening.delete(frame.channel), @channels.delete(frame.channel)}
+          end
+          if opening
+            opening.send(frame) # the client is still waiting for Channel#OpenOk
+          elsif downstream_channel
             downstream_channel.write frame
           end
         when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
@@ -145,7 +184,7 @@ module AMQProxy
         return if @channels.empty?
         Log.debug { "Upstream connection closed, closing #{@channels.size} client connections" }
         @channels.each_value do |downstream_connection|
-          clients << downstream_connection.client
+          clients << downstream_connection.client if downstream_connection
         end
 
         clients.each do |client|
@@ -160,7 +199,7 @@ module AMQProxy
       clients = Set(Client).new
       @channels_lock.synchronize do
         @channels.each_value do |downstream_channel|
-          clients << downstream_channel.client
+          clients << downstream_channel.client if downstream_channel
         end
       end
       clients.each do |client|
@@ -294,5 +333,15 @@ module AMQProxy
     class WriteError < Error; end
 
     class ChannelMaxReached < Error; end
+
+    # Only this channel failed, the connection is still usable
+    class ChannelOpenError < Error
+      getter reply_code : UInt16
+      getter reply_text : String
+
+      def initialize(@reply_code : UInt16, @reply_text : String)
+        super(@reply_text)
+      end
+    end
   end
 end

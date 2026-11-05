@@ -44,8 +44,10 @@ ensure
   end
 end
 
-def with_proxy_to(upstream_port, client_close_timeout = AMQProxy::Client::CLOSE_TIMEOUT, &)
-  server = AMQProxy::Server.new("127.0.0.1", upstream_port, false, client_close_timeout: client_close_timeout)
+def with_proxy_to(upstream_port, client_close_timeout = AMQProxy::Client::CLOSE_TIMEOUT,
+                  max_upstream_channels = UInt16::MAX, open_channel_timeout = AMQProxy::ChannelPool::OPEN_CHANNEL_TIMEOUT, &)
+  server = AMQProxy::Server.new("127.0.0.1", upstream_port, false, max_upstream_channels: max_upstream_channels,
+    client_close_timeout: client_close_timeout, open_channel_timeout: open_channel_timeout)
   tcp_server = TCPServer.new("127.0.0.1", 0)
   spawn { server.listen(tcp_server) }
   Fiber.yield
