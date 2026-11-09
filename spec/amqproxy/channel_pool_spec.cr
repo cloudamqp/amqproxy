@@ -13,7 +13,10 @@ class SlowUpstream
   property open_ok_delay : Time::Span? = Time::Span.zero
   property? refuse_channels = false
   property? close_after_open_ok = false
+  # Like RabbitMQ does with a publishing connection during a resource alarm
+  property? stop_reading_on_publish = false
   @sockets = Array(TCPSocket).new
+  @reading_resumed = Channel(Nil).new
 
   FRAME_MAX = 131_072_u32
 
@@ -23,7 +26,12 @@ class SlowUpstream
     spawn accept_loop, name: "SlowUpstream#accept_loop"
   end
 
+  def resume_reading
+    @reading_resumed.close
+  end
+
   def close
+    resume_reading
     @tcp.close
     @sockets.each &.close
   end
@@ -59,6 +67,8 @@ class SlowUpstream
       when AMQ::Protocol::Frame::Channel::Close
         @channel_closes += 1
         send socket, AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+      when AMQ::Protocol::Frame::Basic::Publish
+        @reading_resumed.receive? if @stop_reading_on_publish
       when AMQ::Protocol::Frame::Connection::Close
         send socket, AMQ::Protocol::Frame::Connection::CloseOk.new
         break
@@ -223,6 +233,51 @@ describe AMQProxy::ChannelPool do
         ensure
           client.close
         end
+      end
+    ensure
+      upstream.close
+    end
+  end
+
+  it "times out a channel open that waits for a blocked write" do
+    upstream = SlowUpstream.new
+    upstream.stop_reading_on_publish = true
+    upstream.channel_max = 2 # one for the publisher, one to time out
+    begin
+      with_proxy_to(upstream.port, open_channel_timeout: 0.5.seconds) do |proxy_url|
+        publisher = AMQP::Client.new(proxy_url).connect
+        channel = publisher.channel
+        published = Channel(Nil).new
+        spawn do
+          body = Bytes.new(1024 * 1024)
+          64.times { channel.basic_publish(body, "", "q") } # more than the socket buffers hold
+        rescue IO::Error | AMQP::Client::Error
+        ensure
+          published.close
+        end
+        sleep 0.5.seconds # until the proxy's write to the upstream blocks
+
+        result = Channel(Exception?).new(1)
+        spawn do
+          AMQP::Client.start(proxy_url, &.channel)
+          result.send nil
+        rescue ex
+          result.send ex
+        end
+        select
+        when ex = result.receive
+          ex.should be_a(AMQP::Client::Channel::ClosedException)
+          ex.try(&.message).should match(/Timeout waiting for upstream to open channel/)
+        when timeout(3.seconds)
+          fail "Channel#Open still waits for the blocked write"
+        end
+
+        upstream.resume_reading
+        published.receive?
+        wait_until { upstream.channel_closes == 1 }.should be_true
+        sleep 0.1.seconds                        # for the proxy to read Channel#CloseOk
+        AMQP::Client.start(proxy_url, &.channel) # needs the closed channel's id
+        upstream.connections.should eq 1
       end
     ensure
       upstream.close

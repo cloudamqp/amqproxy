@@ -93,13 +93,15 @@ module AMQProxy
       id = upstream_channel.channel
       opened = Channel(AMQ::Protocol::Frame::Channel::Close?).new(1)
       @channels_lock.synchronize { @opening[id] = opened }
-      send AMQ::Protocol::Frame::Channel::Open.new(id)
+      written = Channel(Nil).new
+      # in its own fiber, so the timeout also covers waiting behind blocked writes
+      spawn send_channel_open(id, written), name: "Upstream#send_channel_open"
       select
       when refused = opened.receive
       when @done.receive?
         raise Error.new "Upstream connection closed while opening channel"
       when timeout(timeout)
-        if abandon_channel(id)
+        if abandon_channel(id, written)
           raise ChannelOpenError.new(500_u16, "UPSTREAM_ERROR - Timeout waiting for upstream to open channel")
         end
         refused = opened.receive # answered just as the timeout fired
@@ -107,18 +109,33 @@ module AMQProxy
       raise ChannelOpenError.new(refused.reply_code, refused.reply_text) if refused
     end
 
+    # Closes *written* when done, even if the write failed
+    private def send_channel_open(id : UInt16, written : Channel(Nil)) : Nil
+      send AMQ::Protocol::Frame::Channel::Open.new(id)
+    rescue WriteError
+      # connection is gone, read_loop will clean up
+    ensure
+      written.close
+    end
+
     # The server may still open the channel, so close it, but stop
     # forwarding its frames as the client never got Channel#OpenOk.
     # False if the server has already answered.
-    private def abandon_channel(id : UInt16) : Bool
+    private def abandon_channel(id : UInt16, written : Channel(Nil)) : Bool
       @channels_lock.synchronize do
         return false unless @opening.delete(id)
         @channels[id] = nil
       end
-      close_channel(id, 200_u16, "Timeout waiting for Channel#OpenOk")
+      spawn close_when_written(id, written), name: "Upstream#close_when_written"
       true
+    end
+
+    # The server must get Channel#Open before Channel#Close
+    private def close_when_written(id : UInt16, written : Channel(Nil)) : Nil
+      written.receive?
+      close_channel(id, 200_u16, "Timeout waiting for Channel#OpenOk")
     rescue WriteError
-      true # connection is gone, read_loop will clean up
+      # connection is gone, read_loop will clean up
     end
 
     def close_channel(id, code, reason)
