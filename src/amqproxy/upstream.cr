@@ -24,31 +24,62 @@ module AMQProxy
     # a higher value in Connection#TuneOk
     FRAME_MAX = 131_072_u32
 
-    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials, @max_upstream_channels : UInt16 = UInt16::MAX)
-      tcp_socket = TCPSocket.new(@host, @port)
-      tcp_socket.sync = false
-      tcp_socket.keepalive = true
-      tcp_socket.tcp_keepalive_idle = 60
-      tcp_socket.tcp_keepalive_count = 3
-      tcp_socket.tcp_keepalive_interval = 10
-      tcp_socket.tcp_nodelay = true
+    # How long opening a connection may take, applies to the TCP connect and to
+    # each read and write of the TLS and AMQP handshakes. Without it a broker
+    # that doesn't answer stalls the clients waiting for the connection for as
+    # long as the kernel keeps retrying, or forever if it accepts but never
+    # sends Connection#Start.
+    CONNECT_TIMEOUT = 15.seconds
+
+    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials,
+                   @max_upstream_channels : UInt16 = UInt16::MAX, connect_timeout : Time::Span? = CONNECT_TIMEOUT)
+      tcp_socket = connect(connect_timeout)
       @remote_address = tcp_socket.remote_address.to_s
-      @io =
+      @io = tcp_socket
+      @socket = AMQ::Protocol::Stream.new(tcp_socket, FRAME_MAX)
+      tune_ok = begin
+        tcp_socket.read_timeout = connect_timeout
+        tcp_socket.write_timeout = connect_timeout
         if tls_ctx = @tls_ctx
           tls_socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host)
           tls_socket.sync_close = true
-          tls_socket
-        else
-          tcp_socket
+          @io = tls_socket
+          @socket = AMQ::Protocol::Stream.new(tls_socket, FRAME_MAX)
         end
-      @socket = AMQ::Protocol::Stream.new(@io, FRAME_MAX)
-      tune_ok = start(credentials)
+        start(credentials)
+      rescue ex : AccessError
+        raise ex
+      rescue ex : IO::TimeoutError
+        tcp_socket.close rescue nil
+        raise Error.new "Timeout after #{connect_timeout.try &.total_seconds}s waiting for '#{@host}:#{@port}' to complete the handshake", cause: ex
+      rescue ex
+        tcp_socket.close rescue nil
+        raise Error.new "Handshake with '#{@host}:#{@port}' failed: #{ex.message}", cause: ex
+      end
+      # heartbeats, if negotiated, detect a dead upstream from here on
+      tcp_socket.read_timeout = nil
+      tcp_socket.write_timeout = nil
       @channel_max = tune_ok.channel_max
       @frame_max = tune_ok.frame_max
       @heartbeat = tune_ok.heartbeat
       if @heartbeat > 0
         spawn heartbeat_loop((@heartbeat / 2).seconds), name: "Upstream#heartbeat_loop"
       end
+    end
+
+    private def connect(timeout : Time::Span?) : TCPSocket
+      tcp_socket = TCPSocket.new(@host, @port, connect_timeout: timeout)
+      tcp_socket.sync = false
+      tcp_socket.keepalive = true
+      tcp_socket.tcp_keepalive_idle = 60
+      tcp_socket.tcp_keepalive_count = 3
+      tcp_socket.tcp_keepalive_interval = 10
+      tcp_socket.tcp_nodelay = true
+      tcp_socket
+    rescue ex : IO::TimeoutError
+      raise Error.new "Timeout after #{timeout.try &.total_seconds}s connecting to '#{@host}:#{@port}'", cause: ex
+    rescue ex : IO::Error
+      raise Error.new ex.message, cause: ex
     end
 
     # Send heartbeats when the connection is idle, the server expects them
@@ -257,11 +288,6 @@ module AMQProxy
         raise "Unexpected frame on connection to upstream: #{f}"
       end
       tune_ok
-    rescue ex : AccessError
-      raise ex
-    rescue ex
-      @io.close
-      raise Error.new ex.message, cause: ex
     end
 
     private def send_close_ok
