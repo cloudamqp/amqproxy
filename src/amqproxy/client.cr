@@ -225,12 +225,19 @@ module AMQProxy
     end
 
     def close_connection(code, text, frame = nil)
+      text = short_string(text)
       case frame
       when AMQ::Protocol::Frame::Method
         write AMQ::Protocol::Frame::Connection::Close.new(code, text, frame.class_id, frame.method_id)
       else
         write AMQ::Protocol::Frame::Connection::Close.new(code, text, 0_u16, 0_u16)
       end
+    end
+
+    # Reply texts are AMQP short strings, which can't be longer than 255 bytes,
+    # upstream error messages that include the host and the cause can be
+    private def short_string(text : String) : String
+      text.bytesize > 255 ? text.byte_slice(0, 255).scrub("") : text
     end
 
     def close_channel(id, code, reason)
