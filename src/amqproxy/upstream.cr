@@ -119,10 +119,15 @@ module AMQProxy
           # CloseOk a frame on the channel is a connection error, closing
           # this upstream connection for every client using it
           upstream_channel_id = frame.channel # the write below remaps it
-          if downstream_channel = @channels_lock.synchronize { @channels.delete(upstream_channel_id) }
-            downstream_channel.write frame
+          downstream_channel = @channels_lock.synchronize { @channels[upstream_channel_id]? }
+          begin
+            downstream_channel.try &.write(frame)
+            send AMQ::Protocol::Frame::Channel::CloseOk.new(upstream_channel_id)
+          ensure
+            # only now, so a new channel can't get the id, and its Channel#Open
+            # reach the server, before the server has our CloseOk
+            @channels_lock.synchronize { @channels.delete(upstream_channel_id) }
           end
-          send AMQ::Protocol::Frame::Channel::CloseOk.new(upstream_channel_id)
         when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
           if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
             downstream_channel.write(frame)

@@ -92,7 +92,9 @@ module AMQProxy
           discard_on_closing_channel(frame)
           next
         end
-        if frame.channel != 0 && !@channel_map.has_key?(frame.channel) &&
+        # content is never valid on channel 0, which is never in the map
+        if !@channel_map.has_key?(frame.channel) &&
+           (frame.channel != 0 || frame.is_a?(AMQ::Protocol::Frame::Basic::Publish | AMQ::Protocol::Frame::Header | AMQ::Protocol::Frame::BytesBody)) &&
            !frame.is_a?(AMQ::Protocol::Frame::Channel::Open | AMQ::Protocol::Frame::Channel::CloseOk)
           close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           next
