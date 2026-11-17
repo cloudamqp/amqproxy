@@ -314,4 +314,31 @@ describe AMQProxy::ChannelPool do
       upstream.close
     end
   end
+
+  it "closes a client that waits for an upstream connection when shutting down" do
+    upstream = StallingUpstream.new(serve: 0)
+    begin
+      server = AMQProxy::Server.new("127.0.0.1", upstream.port, false, upstream_connect_timeout: 2.seconds)
+      tcp_server = TCPServer.new("127.0.0.1", 0)
+      spawn { server.listen(tcp_server) }
+      Fiber.yield
+      errors = Channel(Exception?).new(1)
+      spawn { errors.send connect_error("amqp://#{tcp_server.local_address}") }
+      wait_until { upstream.accepted == 1 }.should be_true, "Proxy never connected upstream"
+      server.client_connections.should eq 1 # counted while it waits
+      server.stop_accepting_clients
+      server.disconnect_clients
+      select
+      when error = errors.receive
+        error.to_s.should contain "AMQProxy shutdown"
+      when timeout(1.second)
+        fail "Client wasn't sent Connection#Close"
+      end
+      # gone once the connection attempt ends, instead of joining the
+      # clients that a shutdown already disconnected
+      wait_until(3.seconds) { server.client_connections.zero? }.should be_true
+    ensure
+      upstream.close
+    end
+  end
 end
