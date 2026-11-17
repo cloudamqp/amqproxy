@@ -8,11 +8,32 @@ module AMQProxy
     # An upstream connection that may still be connecting. Channels waiting
     # for it count as pending, so that it isn't given more than it can open.
     class PooledUpstream
+      @@last_id = Atomic(UInt64).new(0)
+
+      # Unique across pools, to tell connections apart in logs
+      @id : UInt64 = @@last_id.add(1) &+ 1
       @lock = Mutex.new
       @pending = 0
       @upstream : Upstream?
       @error : Upstream::Error?
       @ready = Channel(Nil).new # closed when connected or failed
+
+      def to_s(io : IO) : Nil
+        io << "upstream #" << @id
+      end
+
+      # Channel counts, for logs
+      def stats : String
+        @lock.synchronize do
+          if upstream = @upstream
+            "#{upstream.channels}/#{upstream.channel_max} channels, #{@pending} pending"
+          elsif @error
+            "failed"
+          else
+            "connecting, #{@pending} pending"
+          end
+        end
+      end
 
       # Counts a pending channel, unless the upstream is full or unusable.
       # *channel_max* applies until the upstream has negotiated its own.
@@ -117,17 +138,22 @@ module AMQProxy
       loop do
         pooled = @lock.synchronize do
           channel_max = @negotiated_channel_max || @max_upstream_channels
-          @upstreams.find(&.reserve?(channel_max)) || add_upstream.tap(&.reserve?(channel_max))
+          @upstreams.find(&.reserve?(channel_max)) || add_upstream(channel_max).tap(&.reserve?(channel_max))
         end
-        return pooled.open_channel(downstream_channel, deadline)
-      rescue Upstream::ChannelMaxReached
-        # the server negotiated a lower channel_max than we reserved for
+        Log.debug { "Opening channel on #{pooled} (#{pooled.stats})" }
+        begin
+          return pooled.open_channel(downstream_channel, deadline)
+        rescue Upstream::ChannelMaxReached
+          # the server negotiated a lower channel_max than we reserved for
+          Log.debug { "No free channel on #{pooled} (#{pooled.stats}), trying another" }
+        end
       end
     end
 
     # Must be called with the lock held
-    private def add_upstream : PooledUpstream
+    private def add_upstream(channel_max : UInt16) : PooledUpstream
       pooled = PooledUpstream.new
+      Log.debug { "Connecting #{pooled}, channel_max #{channel_max} until negotiated" }
       @upstreams.unshift pooled
       spawn connect(pooled), name: "ChannelPool#connect"
       pooled
@@ -140,12 +166,13 @@ module AMQProxy
         pooled.failed(ex)
         return
       end
-      Log.info { "Adding upstream connection" }
+      Log.info { "Adding #{pooled}, channel_max #{upstream.channel_max}" }
       negotiated(upstream.channel_max)
       pooled.connected(upstream)
       upstream.read_loop
     ensure
-      @lock.synchronize { @upstreams.delete pooled }
+      removed = @lock.synchronize { @upstreams.delete pooled }
+      Log.debug { "Removed #{pooled} from pool" } if removed
     end
 
     private def negotiated(channel_max : UInt16) : Nil
@@ -182,13 +209,14 @@ module AMQProxy
           (@upstreams.size - 1).times do # leave at least one connection
             u = @upstreams.pop
             if u.idle?
+              Log.debug { "Closing idle #{u}" }
               begin
                 u.close "Pooled connection closed due to inactivity"
               rescue ex
                 Log.error { "Problem closing upstream: #{ex.inspect}" }
               end
             elsif u.closed?
-              Log.error { "Removing closed upstream connection from pool" }
+              Log.error { "Removing closed #{u} from pool" }
             else
               @upstreams.unshift u
             end
