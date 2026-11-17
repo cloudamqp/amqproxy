@@ -17,6 +17,8 @@ module AMQProxy
     @last_write = Time.instant
     @done = Channel(Nil).new
     @closing = false
+    # Channels we've sent Channel#Close for and are waiting for CloseOk on
+    @closing_channels = Set(UInt16).new
     @remote_address : String
 
     # The largest frame we offer the client in Connection#Tune, the client can
@@ -56,7 +58,7 @@ module AMQProxy
 
     private def finish_publish(channel)
       buffer = @publish_buffers[channel]
-      if upstream_channel = @channel_map[channel]
+      if upstream_channel = @channel_map[channel]?
         upstream_channel.write(buffer.publish)
         upstream_channel.write(buffer.header)
         buffer.bodies.each do |body|
@@ -86,6 +88,15 @@ module AMQProxy
         if @closing && !frame.is_a?(AMQ::Protocol::Frame::Connection::Close | AMQ::Protocol::Frame::Connection::CloseOk)
           next # the spec requires discarding all but Close/CloseOk after sending Close
         end
+        if @closing_channels.includes?(frame.channel)
+          discard_on_closing_channel(frame)
+          next
+        end
+        if frame.channel != 0 && !@channel_map.has_key?(frame.channel) &&
+           !frame.is_a?(AMQ::Protocol::Frame::Channel::Open | AMQ::Protocol::Frame::Channel::CloseOk)
+          close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
+          next
+        end
         case frame
         when AMQ::Protocol::Frame::Heartbeat # noop
         when AMQ::Protocol::Frame::Connection::CloseOk then return
@@ -112,27 +123,29 @@ module AMQProxy
         when AMQ::Protocol::Frame::Basic::Publish
           @publish_buffers[frame.channel] = PublishBuffer.new(frame)
         when AMQ::Protocol::Frame::Header
-          @publish_buffers[frame.channel].header = frame
-          finish_publish(frame.channel) if frame.body_size.zero?
+          if buffer = @publish_buffers[frame.channel]?
+            buffer.header = frame
+            finish_publish(frame.channel) if frame.body_size.zero?
+          else
+            close_connection(505_u16, "UNEXPECTED_FRAME - Content header without a Basic#Publish on channel #{frame.channel}", frame)
+          end
         when AMQ::Protocol::Frame::BytesBody
-          buffer = @publish_buffers[frame.channel]
-          buffer.bodies << frame
-          finish_publish(frame.channel) if buffer.full?
+          if (buffer = @publish_buffers[frame.channel]?) && buffer.header?
+            buffer.bodies << frame
+            finish_publish(frame.channel) if buffer.full?
+          else
+            close_connection(505_u16, "UNEXPECTED_FRAME - Content body without a content header on channel #{frame.channel}", frame)
+          end
         when frame.channel.zero?
           Log.error { "Unexpected connection frame: #{frame}" }
           close_connection(540_u16, "NOT_IMPLEMENTED", frame)
         else
           src_channel = frame.channel
           begin
-            if upstream_channel = @channel_map[frame.channel]
-              upstream_channel.write(frame)
-            else
-              # Channel::Close is sent, waiting for CloseOk
-            end
+            # the channel is mapped, frames for other channels are handled above
+            @channel_map[frame.channel]?.try &.write(frame)
           rescue Upstream::WriteError
             close_channel(src_channel, 500_u16, "UPSTREAM_ERROR")
-          rescue KeyError
-            close_connection(504_u16, "CHANNEL_ERROR - Channel #{frame.channel} not open", frame)
           end
         end
       rescue ex : Upstream::AccessError
@@ -177,6 +190,9 @@ module AMQProxy
 
     # Send frame to client, channel id should already be remapped by the caller
     def write(frame : AMQ::Protocol::Frame)
+      # before anything that can yield, so that from now on frames the client
+      # sends on the channel are discarded instead of forwarded upstream
+      update_channel_state(frame)
       @lock.synchronize do
         if frame.is_a?(AMQ::Protocol::Frame::Connection::Close)
           return if @closing # already sent, waiting for CloseOk
@@ -199,9 +215,6 @@ module AMQProxy
         @last_write = Time.instant
       end
       case frame
-      when AMQ::Protocol::Frame::Channel::Close,
-           AMQ::Protocol::Frame::Channel::CloseOk
-        @channel_map.delete(frame.channel)
       when AMQ::Protocol::Frame::Connection::Close
         spawn wait_for_close_ok, name: "Client#wait_for_close_ok"
       when AMQ::Protocol::Frame::Connection::CloseOk
@@ -210,6 +223,31 @@ module AMQProxy
     rescue IO::Error
       # Client closed connection, suppress error
       @tcp_socket.close rescue nil
+    end
+
+    private def update_channel_state(frame) : Nil
+      case frame
+      when AMQ::Protocol::Frame::Channel::Close
+        @channel_map.delete(frame.channel)
+        @closing_channels << frame.channel
+      when AMQ::Protocol::Frame::Channel::CloseOk
+        @channel_map.delete(frame.channel)
+      end
+    end
+
+    # After we've sent Channel#Close the client may still send frames it sent
+    # before it saw the Close, the spec requires discarding them until its
+    # CloseOk, they can't be forwarded as the upstream channel is gone
+    private def discard_on_closing_channel(frame) : Nil
+      @publish_buffers.delete(frame.channel)
+      case frame
+      when AMQ::Protocol::Frame::Channel::CloseOk
+        @closing_channels.delete(frame.channel)
+      when AMQ::Protocol::Frame::Channel::Close
+        # the client closed the channel at the same time as we did
+        @closing_channels.delete(frame.channel)
+        write AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
+      end
     end
 
     # Closing the socket is the only way a client that never reads notices

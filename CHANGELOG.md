@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Bugfix: Discard frames on a channel the proxy has sent Channel#Close for until the client answers with Channel#CloseOk, as the specification requires. Previously a publish the client sent before it saw the Close dropped its connection without a Connection#Close, and a frame forwarded after the upstream server had the proxy's CloseOk made the server close the upstream connection for every client using it.
+- Bugfix: A publish, content header or content body on a channel that isn't open now closes the client's connection with CHANNEL_ERROR (504) or UNEXPECTED_FRAME (505), instead of dropping it without a Connection#Close.
+
 ## [v3.2.2] - 2026-10-16
 
 ### Fixed
