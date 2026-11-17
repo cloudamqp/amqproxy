@@ -171,20 +171,25 @@ rescue ex
   ex
 end
 
+# Connects and returns the error, or nil if it connected
+private def connect_error(url) : Exception?
+  AMQP::Client.new(url).connect.close
+  nil
+rescue ex
+  ex
+end
+
 describe AMQProxy::ChannelPool do
-  it "fails Channel#Open when the upstream never completes the handshake" do
+  it "fails the client's connect when the upstream never completes the handshake" do
     upstream = StallingUpstream.new(serve: 0)
     begin
       with_proxy(upstream.port, 300.milliseconds) do |proxy_url|
-        conn = AMQP::Client.new(proxy_url).connect
-        begin
-          elapsed = Time.measure do
-            open_channel_error(conn).should_not be_nil
-          end
-          elapsed.should be < 2.seconds
-        ensure
-          conn.close rescue nil
+        error = nil
+        elapsed = Time.measure do
+          error = connect_error(proxy_url)
         end
+        error.to_s.should contain "UPSTREAM_ERROR"
+        elapsed.should be < 2.seconds
       end
     ensure
       upstream.close
@@ -219,22 +224,17 @@ describe AMQProxy::ChannelPool do
     end
   end
 
-  it "shares one upstream connection attempt between clients" do
+  it "shares one upstream connection attempt between connecting clients" do
     upstream = StallingUpstream.new(serve: 0)
     begin
       with_proxy(upstream.port, 1.second) do |proxy_url|
-        conns = Array.new(3) { AMQP::Client.new(proxy_url).connect }
-        begin
-          errors = Channel(Exception?).new
-          elapsed = Time.measure do
-            conns.each { |conn| spawn { errors.send open_channel_error(conn) } }
-            3.times { errors.receive.should_not be_nil }
-          end
-          upstream.accepted.should eq 1
-          elapsed.should be < 1.8.seconds # not one timeout after the other
-        ensure
-          conns.each { |conn| conn.close rescue nil }
+        errors = Channel(Exception?).new
+        elapsed = Time.measure do
+          3.times { spawn { errors.send connect_error(proxy_url) } }
+          3.times { errors.receive.to_s.should contain "UPSTREAM_ERROR" }
         end
+        upstream.accepted.should eq 1
+        elapsed.should be < 1.8.seconds # not one timeout after the other
       end
     ensure
       upstream.close
@@ -246,17 +246,12 @@ describe AMQProxy::ChannelPool do
     upstream.handshake_step_delay = 0.4.seconds # 1.2s in total, each step within the timeout
     begin
       with_proxy(upstream.port, 0.6.seconds) do |proxy_url|
-        conn = AMQP::Client.new(proxy_url).connect
-        begin
-          error = nil
-          elapsed = Time.measure do
-            error = open_channel_error(conn)
-          end
-          error.to_s.should contain "Timeout after 0.6s"
-          elapsed.should be < 1.second
-        ensure
-          conn.close rescue nil
+        error = nil
+        elapsed = Time.measure do
+          error = connect_error(proxy_url)
         end
+        error.to_s.should contain "Timeout after 0.6s"
+        elapsed.should be < 1.second
       end
     ensure
       upstream.close
@@ -313,13 +308,7 @@ describe AMQProxy::ChannelPool do
       server_properties: AMQ::Protocol::Table.new({product: "x" * 300}))
     begin
       with_proxy(upstream.port, 5.seconds) do |proxy_url|
-        conn = AMQP::Client.new(proxy_url).connect
-        begin
-          error = open_channel_error(conn)
-          error.to_s.should contain "UPSTREAM_ERROR"
-        ensure
-          conn.close rescue nil
-        end
+        connect_error(proxy_url).to_s.should contain "UPSTREAM_ERROR"
       end
     ensure
       upstream.close

@@ -76,8 +76,9 @@ module AMQProxy
 
     private def handle_connection(socket, remote_address)
       c = Client.new(socket, @client_close_timeout)
+      channel_pool = @channel_pools[c.credentials]
+      return unless c.open(channel_pool)
       active_client(c) do
-        channel_pool = @channel_pools[c.credentials]
         c.read_loop(channel_pool)
       end
     rescue IO::EOFError

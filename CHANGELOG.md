@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Setting to limit how long opening a connection to the upstream server may take, `--upstream-connect-timeout` / `UPSTREAM_CONNECT_TIMEOUT` / `[main] upstream_connect_timeout`, default 15 seconds. It applies to the whole connection attempt: the DNS lookup, the TCP connect to each address and the TLS and AMQP handshakes. Previously there was no limit, so an unreachable broker held up clients for as long as the kernel retried the connect (about 2 minutes), and a broker that accepted the connection but never answered held them up forever. [#258](https://github.com/cloudamqp/amqproxy/issues/258)
 
+### Changed
+
+- A client's Connection#Open is now answered once there is an upstream connection for its credentials, connecting one if needed. A wrong password, a vhost the user can't access or an unreachable upstream server now fails the client's connect, with ACCESS_REFUSED (403) or UPSTREAM_ERROR (503), like it would without the proxy. Previously the client's connect always succeeded and the error came at its first Channel#Open.
+
 ### Fixed
 
 - Bugfix: A slow or failing connection attempt to the upstream server, or an upstream connection that has stopped reading, no longer blocks clients that can open their channel on another upstream connection. Clients that need a new upstream connection at the same time now share one connection attempt, and its result, instead of opening one each, one after another. [#258](https://github.com/cloudamqp/amqproxy/issues/258)
