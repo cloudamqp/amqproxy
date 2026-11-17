@@ -9,11 +9,7 @@ module AMQProxy
     Log = ::Log.for(self)
     @socket : AMQ::Protocol::Stream
     @io : TCPSocket | OpenSSL::SSL::Socket::Client
-    # nil for a channel that timed out while opening, kept until the server
-    # confirms that it's closed so that the id isn't reused
-    @channels = Hash(UInt16, DownstreamChannel?).new
-    # Gets nil on Channel#OpenOk, or the Channel#Close the server refused with
-    @opening = Hash(UInt16, Channel(AMQ::Protocol::Frame::Channel::Close?)).new
+    @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
     @lock = Mutex.new
     @remote_address : String
@@ -73,8 +69,8 @@ module AMQProxy
       # connection is gone, read_loop will clean up
     end
 
-    # Takes a free channel id, which counts towards `#channels` from now on,
-    # the channel must then be opened with `#open_channel`
+    # Takes a free channel id, which counts towards `#channels` from now on.
+    # The caller sends Channel#Open on it.
     def create_channel(downstream_channel : DownstreamChannel) : UpstreamChannel
       @channels_lock.synchronize do
         raise ChannelMaxReached.new if @channels.size >= @channel_max
@@ -86,56 +82,6 @@ module AMQProxy
         end
         raise ChannelMaxReached.new
       end
-    end
-
-    # Sends Channel#Open and waits for the server to answer
-    def open_channel(upstream_channel : UpstreamChannel, timeout : Time::Span) : Nil
-      id = upstream_channel.channel
-      opened = Channel(AMQ::Protocol::Frame::Channel::Close?).new(1)
-      @channels_lock.synchronize { @opening[id] = opened }
-      written = Channel(Nil).new
-      # in its own fiber, so the timeout also covers waiting behind blocked writes
-      spawn send_channel_open(id, written), name: "Upstream#send_channel_open"
-      select
-      when refused = opened.receive
-      when @done.receive?
-        raise Error.new "Upstream connection closed while opening channel"
-      when timeout(timeout)
-        if abandon_channel(id, written)
-          raise ChannelOpenError.new(500_u16, "UPSTREAM_ERROR - Timeout waiting for upstream to open channel")
-        end
-        refused = opened.receive # answered just as the timeout fired
-      end
-      raise ChannelOpenError.new(refused.reply_code, refused.reply_text) if refused
-    end
-
-    # Closes *written* when done, even if the write failed
-    private def send_channel_open(id : UInt16, written : Channel(Nil)) : Nil
-      send AMQ::Protocol::Frame::Channel::Open.new(id)
-    rescue WriteError
-      # connection is gone, read_loop will clean up
-    ensure
-      written.close
-    end
-
-    # The server may still open the channel, so close it, but stop
-    # forwarding its frames as the client never got Channel#OpenOk.
-    # False if the server has already answered.
-    private def abandon_channel(id : UInt16, written : Channel(Nil)) : Bool
-      @channels_lock.synchronize do
-        return false unless @opening.delete(id)
-        @channels[id] = nil
-      end
-      spawn close_when_written(id, written), name: "Upstream#close_when_written"
-      true
-    end
-
-    # The server must get Channel#Open before Channel#Close
-    private def close_when_written(id : UInt16, written : Channel(Nil)) : Nil
-      written.receive?
-      close_channel(id, 200_u16, "Timeout waiting for Channel#OpenOk")
-    rescue WriteError
-      # connection is gone, read_loop will clean up
     end
 
     def close_channel(id, code, reason)
@@ -165,25 +111,10 @@ module AMQProxy
         when AMQ::Protocol::Frame::Connection::Blocked,
              AMQ::Protocol::Frame::Connection::Unblocked
           send_to_all_clients(frame)
-        when AMQ::Protocol::Frame::Channel::OpenOk
-          opening, downstream_channel = @channels_lock.synchronize do
-            downstream = @channels[frame.channel]?
-            # without a client to tell, the waiter times out and closes it
-            {downstream && @opening.delete(frame.channel), downstream}
-          end
-          if opening && downstream_channel
-            opening.send(nil)
-            # here, so that the client gets it before any other frame on the channel
-            downstream_channel.opened(UpstreamChannel.new(self, frame.channel))
-          end
+        when AMQ::Protocol::Frame::Channel::OpenOk # the proxy has sent the client its own
         when AMQ::Protocol::Frame::Channel::Close
           send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
-          opening, downstream_channel = @channels_lock.synchronize do
-            {@opening.delete(frame.channel), @channels.delete(frame.channel)}
-          end
-          if opening
-            opening.send(frame) # the client is still waiting for Channel#OpenOk
-          elsif downstream_channel
+          if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
             downstream_channel.write frame
           end
         when AMQ::Protocol::Frame::Channel::CloseOk # when client requested channel close
@@ -213,7 +144,7 @@ module AMQProxy
         return if @channels.empty?
         Log.debug { "Upstream connection closed, closing #{@channels.size} client connections" }
         @channels.each_value do |downstream_connection|
-          clients << downstream_connection.client if downstream_connection
+          clients << downstream_connection.client
         end
 
         clients.each do |client|
@@ -228,7 +159,7 @@ module AMQProxy
       clients = Set(Client).new
       @channels_lock.synchronize do
         @channels.each_value do |downstream_channel|
-          clients << downstream_channel.client if downstream_channel
+          clients << downstream_channel.client
         end
       end
       clients.each do |client|
@@ -362,15 +293,5 @@ module AMQProxy
     class WriteError < Error; end
 
     class ChannelMaxReached < Error; end
-
-    # Only this channel failed, the connection is still usable
-    class ChannelOpenError < Error
-      getter reply_code : UInt16
-      getter reply_text : String
-
-      def initialize(@reply_code : UInt16, @reply_text : String)
-        super(@reply_text)
-      end
-    end
   end
 end

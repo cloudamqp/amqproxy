@@ -1,16 +1,15 @@
 require "../spec_helper"
 
-# AMQP server that can be slow to accept connections and to open channels
+# AMQP server that can be slow to accept connections and may not open channels
 class SlowUpstream
   getter port : Int32
   getter connections = 0
-  getter channel_closes = 0
+  getter publishes = 0
   # Connections, from the first, that never get Connection#Start
   property stalled_connections = 0
   property start_delay = Time::Span.zero
   property channel_max = UInt16::MAX
-  # Delay before Channel#OpenOk, nil to never send it
-  property open_ok_delay : Time::Span? = Time::Span.zero
+  property? send_open_ok = true
   property? refuse_channels = false
   property? close_after_open_ok = false
   # Like RabbitMQ does with a publishing connection during a resource alarm
@@ -54,8 +53,7 @@ class SlowUpstream
       when AMQ::Protocol::Frame::Channel::Open
         if @refuse_channels
           send socket, AMQ::Protocol::Frame::Channel::Close.new(frame.channel, 406_u16, "PRECONDITION_FAILED - refused", 20_u16, 10_u16)
-        elsif delay = @open_ok_delay
-          sleep delay
+        elsif @send_open_ok
           open_ok = AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
           if @close_after_open_ok # in one write, so the proxy reads both at once
             socket.write_bytes open_ok, IO::ByteFormat::NetworkEndian
@@ -65,9 +63,9 @@ class SlowUpstream
           end
         end
       when AMQ::Protocol::Frame::Channel::Close
-        @channel_closes += 1
         send socket, AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
       when AMQ::Protocol::Frame::Basic::Publish
+        @publishes += 1
         @reading_resumed.receive? if @stop_reading_on_publish
       when AMQ::Protocol::Frame::Connection::Close
         send socket, AMQ::Protocol::Frame::Connection::CloseOk.new
@@ -137,7 +135,7 @@ describe AMQProxy::ChannelPool do
     upstream = SlowUpstream.new
     upstream.stalled_connections = Int32::MAX
     begin
-      with_proxy_to(upstream.port, open_channel_timeout: 0.5.seconds) do |proxy_url|
+      with_proxy_to(upstream.port, connect_timeout: 0.5.seconds) do |proxy_url|
         AMQP::Client.start(proxy_url) do |conn|
           expect_raises(AMQP::Client::Error, /Timeout connecting to upstream/) do
             conn.channel
@@ -153,7 +151,7 @@ describe AMQProxy::ChannelPool do
     upstream = SlowUpstream.new
     upstream.stalled_connections = 1
     begin
-      with_proxy_to(upstream.port, max_upstream_channels: 1_u16, open_channel_timeout: 2.seconds) do |proxy_url|
+      with_proxy_to(upstream.port, max_upstream_channels: 1_u16, connect_timeout: 2.seconds) do |proxy_url|
         first = Channel(Exception?).new(1)
         spawn do
           AMQP::Client.start(proxy_url, &.channel)
@@ -183,36 +181,14 @@ describe AMQProxy::ChannelPool do
     end
   end
 
-  it "waits for the upstream to open the channel" do
+  it "forwards frames before the upstream has opened the channel" do
     upstream = SlowUpstream.new
-    upstream.open_ok_delay = 0.3.seconds
+    upstream.send_open_ok = false
     begin
       with_proxy_to(upstream.port) do |proxy_url|
         AMQP::Client.start(proxy_url) do |conn|
-          started = Time.instant
-          conn.channel
-          (Time.instant - started).should be >= 0.3.seconds
-        end
-      end
-    ensure
-      upstream.close
-    end
-  end
-
-  it "closes a channel that the upstream didn't open in time" do
-    upstream = SlowUpstream.new
-    upstream.open_ok_delay = nil
-    begin
-      with_proxy_to(upstream.port, open_channel_timeout: 0.5.seconds) do |proxy_url|
-        AMQP::Client.start(proxy_url) do |conn|
-          expect_raises(AMQP::Client::Channel::ClosedException, /Timeout waiting for upstream to open channel/) do
-            conn.channel
-          end
-          wait_until { upstream.channel_closes == 1 }.should be_true
-
-          upstream.open_ok_delay = Time::Span.zero
-          conn.channel
-          upstream.connections.should eq 1
+          conn.channel.basic_publish("msg", "", "q")
+          wait_until { upstream.publishes == 1 }.should be_true
         end
       end
     ensure
@@ -239,12 +215,11 @@ describe AMQProxy::ChannelPool do
     end
   end
 
-  it "times out a channel open that waits for a blocked write" do
+  it "sends Channel#OpenOk while a write to the upstream is blocked" do
     upstream = SlowUpstream.new
     upstream.stop_reading_on_publish = true
-    upstream.channel_max = 2 # one for the publisher, one to time out
     begin
-      with_proxy_to(upstream.port, open_channel_timeout: 0.5.seconds) do |proxy_url|
+      with_proxy_to(upstream.port) do |proxy_url|
         publisher = AMQP::Client.new(proxy_url).connect
         channel = publisher.channel
         published = Channel(Nil).new
@@ -257,27 +232,26 @@ describe AMQProxy::ChannelPool do
         end
         sleep 0.5.seconds # until the proxy's write to the upstream blocks
 
-        result = Channel(Exception?).new(1)
+        result = Channel(AMQP::Client::Connection | Exception).new(1)
         spawn do
-          AMQP::Client.start(proxy_url, &.channel)
-          result.send nil
+          conn = AMQP::Client.new(proxy_url).connect
+          conn.channel
+          result.send conn
         rescue ex
           result.send ex
         end
-        select
-        when ex = result.receive
-          ex.should be_a(AMQP::Client::Channel::ClosedException)
-          ex.try(&.message).should match(/Timeout waiting for upstream to open channel/)
+        conn = select
+        when r = result.receive
+          r.should be_a(AMQP::Client::Connection)
+          r.as(AMQP::Client::Connection)
         when timeout(3.seconds)
-          fail "Channel#Open still waits for the blocked write"
+          fail "Channel#OpenOk waits for the blocked write"
         end
+        upstream.connections.should eq 1 # the channel is on the blocked connection
 
         upstream.resume_reading
         published.receive?
-        wait_until { upstream.channel_closes == 1 }.should be_true
-        sleep 0.1.seconds                        # for the proxy to read Channel#CloseOk
-        AMQP::Client.start(proxy_url, &.channel) # needs the closed channel's id
-        upstream.connections.should eq 1
+        conn.close
       end
     ensure
       upstream.close
@@ -290,8 +264,10 @@ describe AMQProxy::ChannelPool do
     begin
       with_proxy_to(upstream.port) do |proxy_url|
         AMQP::Client.start(proxy_url) do |conn|
+          channel = conn.channel
+          wait_until { channel.closed? }.should be_true
           expect_raises(AMQP::Client::Channel::ClosedException, /406 - PRECONDITION_FAILED - refused/) do
-            conn.channel
+            channel.queue_declare("q")
           end
           upstream.refuse_channels = false
           conn.channel
@@ -307,7 +283,7 @@ describe AMQProxy::ChannelPool do
     upstream.start_delay = 0.3.seconds # so that all clients wait for the first connection
     upstream.channel_max = 1_u16
     begin
-      with_proxy_to(upstream.port, open_channel_timeout: 3.seconds) do |proxy_url|
+      with_proxy_to(upstream.port, connect_timeout: 3.seconds) do |proxy_url|
         done = Channel(Exception?).new(3)
         3.times do
           spawn do
@@ -332,7 +308,7 @@ describe AMQProxy::ChannelPool do
     upstream = SlowUpstream.new
     upstream.channel_max = 1_u16
     begin
-      with_proxy_to(upstream.port, open_channel_timeout: 3.seconds) do |proxy_url|
+      with_proxy_to(upstream.port, connect_timeout: 3.seconds) do |proxy_url|
         AMQP::Client.start(proxy_url) do |conn|
           conn.channel # the only connection is now full
           upstream.start_delay = 0.5.seconds
@@ -388,7 +364,7 @@ describe AMQProxy::ChannelPool do
     upstream = SlowUpstream.new
     upstream.channel_max = 1_u16
     begin
-      with_proxy_to(upstream.port, open_channel_timeout: 3.seconds) do |proxy_url|
+      with_proxy_to(upstream.port, connect_timeout: 3.seconds) do |proxy_url|
         AMQP::Client.start(proxy_url, &.channel)
         upstream.channel_max = UInt16::MAX
         upstream.start_delay = 0.3.seconds

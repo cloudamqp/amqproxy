@@ -54,19 +54,18 @@ module AMQProxy
         end
       end
 
-      # Opens a channel reserved with `#reserve?`
-      def open_channel(downstream_channel : DownstreamChannel, deadline : Time::Instant) : Nil
+      # Waits for the connection, then takes the channel reserved with `#reserve?`
+      def create_channel(downstream_channel : DownstreamChannel, deadline : Time::Instant) : UpstreamChannel
         upstream = begin
           wait_for_connection(deadline)
         rescue ex
           @lock.synchronize { @pending -= 1 }
           raise ex
         end
-        upstream_channel = @lock.synchronize do
+        @lock.synchronize do
           @pending -= 1 # counted by the upstream from here
           upstream.create_channel(downstream_channel)
         end
-        upstream.open_channel(upstream_channel, deadline - Time.instant)
       end
 
       private def wait_for_connection(deadline : Time::Instant) : Upstream
@@ -118,8 +117,8 @@ module AMQProxy
 
     Log = ::Log.for(self)
 
-    # How long `#open_channel` waits for a channel, including connecting to upstream
-    OPEN_CHANNEL_TIMEOUT = 10.seconds
+    # How long to wait for an upstream to connect
+    CONNECT_TIMEOUT = 10.seconds
 
     # RabbitMQ's default, the guess until the pool's first connection has negotiated
     RABBITMQ_CHANNEL_MAX = 2047_u16
@@ -130,14 +129,15 @@ module AMQProxy
     @negotiated_channel_max : UInt16?
 
     def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, @credentials : Credentials, @idle_connection_timeout : Int32, @max_upstream_channels : UInt16,
-                   @open_channel_timeout : Time::Span = OPEN_CHANNEL_TIMEOUT)
+                   @connect_timeout : Time::Span = CONNECT_TIMEOUT)
       @max_upstream_channels = UInt16::MAX if @max_upstream_channels.zero?
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
-    # Returns when the upstream has told *downstream_channel* that it's open
-    def open_channel(downstream_channel : DownstreamChannel) : Nil
-      deadline = Time.instant + @open_channel_timeout
+    # Waits only for a connecting upstream, as its channel_max isn't known yet.
+    # The caller sends Channel#Open on the returned channel.
+    def get(downstream_channel : DownstreamChannel) : UpstreamChannel
+      deadline = Time.instant + @connect_timeout
       loop do
         pooled = @lock.synchronize do
           channel_max = @negotiated_channel_max || Math.min(@max_upstream_channels, RABBITMQ_CHANNEL_MAX)
@@ -145,7 +145,7 @@ module AMQProxy
         end
         Log.debug { "Opening channel on #{pooled} (#{pooled.stats})" }
         begin
-          return pooled.open_channel(downstream_channel, deadline)
+          return pooled.create_channel(downstream_channel, deadline)
         rescue Upstream::ChannelMaxReached
           # the server negotiated a lower channel_max than we reserved for
           Log.debug { "No free channel on #{pooled} (#{pooled.stats}), trying another" }
@@ -164,7 +164,7 @@ module AMQProxy
 
     private def connect(pooled : PooledUpstream) : Nil
       upstream = begin
-        Upstream.new(@host, @port, @tls_ctx, @credentials, @max_upstream_channels, @open_channel_timeout)
+        Upstream.new(@host, @port, @tls_ctx, @credentials, @max_upstream_channels, @connect_timeout)
       rescue ex
         Log.warn { "Could not connect #{pooled}: #{ex.message}" }
         pooled.failed(ex)
