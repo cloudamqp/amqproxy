@@ -32,39 +32,45 @@ module AMQProxy
       spawn shrink_pool_loop, name: "shrink pool loop"
     end
 
-    # Connecting is done outside of @lock, so a slow or unresponsive upstream
-    # only holds up the clients that need a new connection, not the ones that
-    # can open their channel on an upstream that's already connected
+    # Only picking an upstream happens under @lock. Connecting, and writing
+    # Channel#Open, happen outside of it, so a slow or unresponsive upstream
+    # only holds up the clients that use it, not every client in the pool.
     def get(downstream_channel : DownstreamChannel) : UpstreamChannel
       loop do
-        dial, owner = @lock.synchronize do
-          if upstream_channel = open_on_connected_upstream(downstream_channel)
-            return upstream_channel
-          end
-          if dial = @dial
-            {dial, false}
+        reserved, dial, owner = @lock.synchronize do
+          if upstream_channel = reserve_on_connected_upstream(downstream_channel)
+            {upstream_channel, nil, false}
+          elsif dial = @dial
+            {nil, dial, false}
           else
-            {@dial = Dial.new, true}
+            {nil, @dial = Dial.new, true}
           end
         end
-        if owner
-          add_upstream(dial)
-        else
-          dial.wait
-          if ex = dial.error
-            raise ex.is_a?(Upstream::AccessError) ? Upstream::AccessError.new(ex.message, cause: ex) : Upstream::Error.new(ex.message, cause: ex)
+        if reserved
+          return reserved if send_channel_open(reserved)
+        elsif dial
+          if owner
+            add_upstream(dial)
+          else
+            dial.wait
+            if ex = dial.error
+              raise ex.is_a?(Upstream::AccessError) ? Upstream::AccessError.new(ex.message, cause: ex) : Upstream::Error.new(ex.message, cause: ex)
+            end
           end
         end
-        # retry, the new upstream is at the front of the pool
+        # retry: a new upstream is at the front of the pool, or a failed one is closed
       end
     end
 
-    private def open_on_connected_upstream(downstream_channel) : UpstreamChannel?
+    # Must be called with @lock held. No I/O, so the upstream is back in the
+    # pool before anything can yield, and its read_loop can remove it if it
+    # closes.
+    private def reserve_on_connected_upstream(downstream_channel) : UpstreamChannel?
       @upstreams.size.times do
         upstream = @upstreams.shift? || break
         next if upstream.closed?
         begin
-          upstream_channel = upstream.open_channel_for(downstream_channel)
+          upstream_channel = upstream.reserve_channel(downstream_channel)
           @upstreams.unshift(upstream)
           return upstream_channel
         rescue Upstream::ChannelMaxReached
@@ -72,6 +78,17 @@ module AMQProxy
         end
       end
       nil
+    end
+
+    # False if the upstream connection failed, it's then closed, so the next
+    # attempt picks another upstream or connects a new one
+    private def send_channel_open(upstream_channel : UpstreamChannel) : Bool
+      upstream_channel.upstream.send_channel_open(upstream_channel.channel)
+      true
+    rescue ex : Upstream::WriteError
+      Log.warn { "Upstream connection failed while opening a channel, retrying: #{ex.message}" }
+      upstream_channel.upstream.release_channel(upstream_channel.channel)
+      false
     end
 
     private def add_upstream(dial : Dial) : Nil
