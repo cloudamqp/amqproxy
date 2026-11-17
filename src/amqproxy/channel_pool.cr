@@ -163,6 +163,7 @@ module AMQProxy
       upstream = begin
         Upstream.new(@host, @port, @tls_ctx, @credentials, @max_upstream_channels, @open_channel_timeout)
       rescue ex
+        Log.warn { "Could not connect #{pooled}: #{ex.message}" }
         pooled.failed(ex)
         return
       end
