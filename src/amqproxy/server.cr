@@ -76,9 +76,11 @@ module AMQProxy
 
     private def handle_connection(socket, remote_address)
       c = Client.new(socket, @client_close_timeout)
+      # tracked while it waits for an upstream too, so a shutdown closes it
+      # and waits for it
       active_client(c) do
         channel_pool = @channel_pools[c.credentials]
-        c.read_loop(channel_pool)
+        c.read_loop(channel_pool) if c.open(channel_pool)
       end
     rescue IO::EOFError
       # Client closed connection before/while negotiating

@@ -49,16 +49,38 @@ module AMQProxy
         if reserved
           return reserved if send_channel_open(reserved)
         elsif dial
-          if owner
-            add_upstream(dial)
-          else
-            dial.wait
-            if ex = dial.error
-              raise ex.is_a?(Upstream::AccessError) ? Upstream::AccessError.new(ex.message, cause: ex) : Upstream::Error.new(ex.message, cause: ex)
-            end
-          end
+          connect_or_wait(dial, owner)
         end
         # retry: a new upstream is at the front of the pool, or a failed one is closed
+      end
+    end
+
+    # Returns once the pool has a connected upstream, connecting one if needed,
+    # raises Upstream::Error if that fails
+    def connect : Nil
+      loop do
+        dial, owner = @lock.synchronize do
+          return if @upstreams.any? { |upstream| !upstream.closed? }
+          if dial = @dial
+            {dial, false}
+          else
+            {@dial = Dial.new, true}
+          end
+        end
+        connect_or_wait(dial, owner)
+      end
+    end
+
+    # Connects a new upstream if this caller started the connection attempt,
+    # otherwise waits for the one in progress and raises its error, if any
+    private def connect_or_wait(dial : Dial, owner : Bool) : Nil
+      if owner
+        add_upstream(dial)
+      else
+        dial.wait
+        if ex = dial.error
+          raise ex.is_a?(Upstream::AccessError) ? Upstream::AccessError.new(ex.message, cause: ex) : Upstream::Error.new(ex.message, cause: ex)
+        end
       end
     end
 

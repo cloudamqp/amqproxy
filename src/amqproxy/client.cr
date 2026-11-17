@@ -324,14 +324,55 @@ module AMQProxy
 
       tune_ok = socket.next_frame.as(AMQ::Protocol::Frame::Connection::TuneOk)
 
+      # Connection#OpenOk is sent by #open, once there's an upstream connection
       open = socket.next_frame.as(AMQ::Protocol::Frame::Connection::Open)
       vhost = open.vhost
 
-      open_ok = AMQ::Protocol::Frame::Connection::OpenOk.new
-      open_ok.to_io(socket, IO::ByteFormat::NetworkEndian)
-      socket.flush
-
       {tune_ok, Credentials.new(user, password, vhost)}
+    end
+
+    # Answers the client's Connection#Open once the pool has an upstream
+    # connection for its credentials, so that a wrong password or an
+    # unreachable broker fails the client's connect, like it would without
+    # the proxy, rather than its first Channel#Open. Returns false if the
+    # connection was refused, or closed by a shutdown while it waited.
+    def open(channel_pool : ChannelPool) : Bool
+      Log.context.set(client: @remote_address)
+      channel_pool.connect
+      opened = @lock.synchronize do
+        # a shutdown may have sent Connection#Close while we waited
+        next false if @closing
+        @socket.write_bytes AMQ::Protocol::Frame::Connection::OpenOk.new, IO::ByteFormat::NetworkEndian
+        @socket.flush
+        true
+      end
+      opened || close_during_open
+    rescue ex : Upstream::AccessError
+      Log.error { "Access refused, reason: #{ex.message}" }
+      close_during_open(403_u16, ex.message || "ACCESS_REFUSED")
+    rescue ex : Upstream::Error
+      Log.error { "Upstream error: #{ex.message}" }
+      close_during_open(503_u16, "UPSTREAM_ERROR - #{ex.message}")
+    rescue IO::Error
+      @tcp_socket.close rescue nil
+      false
+    end
+
+    # Answers Connection#Open with Connection#Close, unless one is already
+    # sent, then waits for the CloseOk (bounded by the close timeout) before
+    # closing the socket. Returns false, as the connection never opened.
+    private def close_during_open(code : UInt16 = 0_u16, text : String = "") : Bool
+      write AMQ::Protocol::Frame::Connection::Close.new(code, short_string(text),
+        AMQ::Protocol::Frame::Connection::Open::CLASS_ID, AMQ::Protocol::Frame::Connection::Open::METHOD_ID)
+      @tcp_socket.read_timeout = @close_timeout
+      until @socket.next_frame.is_a?(AMQ::Protocol::Frame::Connection::CloseOk)
+      end
+      false
+    rescue IO::Error | AMQ::Protocol::Error
+      false
+    ensure
+      @done.close # read_loop never runs, stops wait_for_close_ok
+      @tcp_socket.close rescue nil
     end
 
     ServerProperties = AMQ::Protocol::Table.new({
