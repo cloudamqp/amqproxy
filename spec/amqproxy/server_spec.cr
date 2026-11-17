@@ -210,20 +210,40 @@ describe AMQProxy::Server do
 
   it "passes connection blocked frames to clients" do
     with_server do |_server, proxy_url|
-      done = Channel(Nil).new
+      blocked = Channel(Nil).new(1)
+      unblocked = Channel(Nil).new(1)
       Fiber.yield
       AMQP::Client.start(proxy_url) do |conn|
-        conn.on_blocked do
-          done.send nil
+        conn.on_blocked { blocked.send nil }
+        conn.on_unblocked { unblocked.send nil }
+        ch = conn.channel
+        begin
+          system("#{MAYBE_SUDO}rabbitmqctl set_vm_memory_high_watermark 0.001 > /dev/null").should be_true
+          # RabbitMQ only blocks a connection that publishes while the alarm is
+          # on, and a single publish can get there before the alarm does
+          publishing = true
+          spawn do
+            while publishing
+              ch.basic_publish "foobar", "amq.fanout"
+              sleep 0.1.seconds
+            end
+          rescue AMQP::Client::Error | IO::Error
+          end
+          select
+          when blocked.receive
+          when timeout(10.seconds)
+            fail "Never got Connection#Blocked"
+          end
+        ensure
+          publishing = false
+          # also after a failure, the alarm would block every spec after this one
           system("#{MAYBE_SUDO}rabbitmqctl set_vm_memory_high_watermark 0.8 > /dev/null").should be_true
         end
-        conn.on_unblocked do
-          done.send nil
+        select
+        when unblocked.receive
+        when timeout(10.seconds)
+          fail "Never got Connection#Unblocked"
         end
-        ch = conn.channel
-        system("#{MAYBE_SUDO}rabbitmqctl set_vm_memory_high_watermark 0.001 > /dev/null").should be_true
-        ch.basic_publish "foobar", "amq.fanout"
-        2.times { done.receive }
       end
     end
   end
