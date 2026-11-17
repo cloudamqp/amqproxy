@@ -121,6 +121,9 @@ module AMQProxy
     # How long `#open_channel` waits for a channel, including connecting to upstream
     OPEN_CHANNEL_TIMEOUT = 10.seconds
 
+    # RabbitMQ's default, the guess until the pool's first connection has negotiated
+    RABBITMQ_CHANNEL_MAX = 2047_u16
+
     @lock = Mutex.new
     @upstreams = Deque(PooledUpstream).new
     # From the latest connection, likely what the next one negotiates too
@@ -137,7 +140,7 @@ module AMQProxy
       deadline = Time.instant + @open_channel_timeout
       loop do
         pooled = @lock.synchronize do
-          channel_max = @negotiated_channel_max || @max_upstream_channels
+          channel_max = @negotiated_channel_max || Math.min(@max_upstream_channels, RABBITMQ_CHANNEL_MAX)
           @upstreams.find(&.reserve?(channel_max)) || add_upstream(channel_max).tap(&.reserve?(channel_max))
         end
         Log.debug { "Opening channel on #{pooled} (#{pooled.stats})" }
