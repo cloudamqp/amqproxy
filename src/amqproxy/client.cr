@@ -97,7 +97,9 @@ module AMQProxy
           raise "Channel already opened" if @channel_map.has_key? frame.channel
           upstream_channel = channel_pool.get(DownstreamChannel.new(self, frame.channel))
           @channel_map[frame.channel] = upstream_channel
+          # before Channel#Open, so the client gets it before the server's frames on the channel
           write AMQ::Protocol::Frame::Channel::OpenOk.new(frame.channel)
+          upstream_channel.write(frame)
         when AMQ::Protocol::Frame::Channel::Close
           if upstream_channel = @channel_map.delete(frame.channel)
             # Channel was open, forward close to upstream

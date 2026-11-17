@@ -11,10 +11,9 @@ module AMQProxy
     @io : TCPSocket | OpenSSL::SSL::Socket::Client
     @channels = Hash(UInt16, DownstreamChannel).new
     @channels_lock = Mutex.new
-    @channel_max : UInt16
     @lock = Mutex.new
     @remote_address : String
-    @channel_max : UInt16
+    getter channel_max : UInt16
     @frame_max : UInt32
     @heartbeat : UInt16
     @last_write = Time.instant
@@ -24,8 +23,9 @@ module AMQProxy
     # a higher value in Connection#TuneOk
     FRAME_MAX = 131_072_u32
 
-    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials, @max_upstream_channels : UInt16 = UInt16::MAX)
-      tcp_socket = TCPSocket.new(@host, @port)
+    def initialize(@host : String, @port : Int32, @tls_ctx : OpenSSL::SSL::Context::Client?, credentials, @max_upstream_channels : UInt16 = UInt16::MAX,
+                   connect_timeout : Time::Span? = nil)
+      tcp_socket = TCPSocket.new(@host, @port, connect_timeout: connect_timeout)
       tcp_socket.sync = false
       tcp_socket.keepalive = true
       tcp_socket.tcp_keepalive_idle = 60
@@ -33,6 +33,7 @@ module AMQProxy
       tcp_socket.tcp_keepalive_interval = 10
       tcp_socket.tcp_nodelay = true
       @remote_address = tcp_socket.remote_address.to_s
+      tcp_socket.read_timeout = connect_timeout # also limits the TLS and AMQP handshakes
       @io =
         if tls_ctx = @tls_ctx
           tls_socket = OpenSSL::SSL::Socket::Client.new(tcp_socket, tls_ctx, hostname: @host)
@@ -43,6 +44,7 @@ module AMQProxy
         end
       @socket = AMQ::Protocol::Stream.new(@io, FRAME_MAX)
       tune_ok = start(credentials)
+      tcp_socket.read_timeout = nil
       @channel_max = tune_ok.channel_max
       @frame_max = tune_ok.frame_max
       @heartbeat = tune_ok.heartbeat
@@ -67,14 +69,11 @@ module AMQProxy
       # connection is gone, read_loop will clean up
     end
 
-    def open_channel_for(downstream_channel : DownstreamChannel) : UpstreamChannel
-      upstream_channel = create_upstream_channel(downstream_channel)
-      send AMQ::Protocol::Frame::Channel::Open.new(upstream_channel.channel)
-      upstream_channel
-    end
-
-    private def create_upstream_channel(downstream_channel : DownstreamChannel)
+    # Takes a free channel id, which counts towards `#channels` from now on.
+    # The caller sends Channel#Open on it.
+    def create_channel(downstream_channel : DownstreamChannel) : UpstreamChannel
       @channels_lock.synchronize do
+        raise ChannelMaxReached.new if @channels.size >= @channel_max
         1_u16.upto(@channel_max) do |i|
           unless @channels.has_key?(i)
             @channels[i] = downstream_channel
@@ -112,7 +111,7 @@ module AMQProxy
         when AMQ::Protocol::Frame::Connection::Blocked,
              AMQ::Protocol::Frame::Connection::Unblocked
           send_to_all_clients(frame)
-        when AMQ::Protocol::Frame::Channel::OpenOk # assume it always succeeds
+        when AMQ::Protocol::Frame::Channel::OpenOk # the proxy has sent the client its own
         when AMQ::Protocol::Frame::Channel::Close
           send AMQ::Protocol::Frame::Channel::CloseOk.new(frame.channel)
           if downstream_channel = @channels_lock.synchronize { @channels.delete(frame.channel) }
